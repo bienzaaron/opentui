@@ -1101,6 +1101,27 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     })
   }
 
+  private dispatchMouseEvent(
+    target: Renderable,
+    attributes: RawMouseEvent & { source?: Renderable; isDragging?: boolean },
+  ): MouseEvent {
+    const event = new MouseEvent(target, attributes)
+    target.processMouseEvent(event)
+
+    if (event.type === "down" && event.button === MouseButton.LEFT && !event.defaultPrevented) {
+      let current: Renderable | null = target
+      while (current) {
+        if (current.focusable) {
+          current.focus()
+          break
+        }
+        current = current.parent
+      }
+    }
+
+    return event
+  }
+
   private handleMouseData(data: Buffer): boolean {
     const mouseEvent = this.mouseParser.parseMouseEvent(data)
 
@@ -1160,8 +1181,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
           maybeRenderable.shouldStartSelection(mouseEvent.x, mouseEvent.y)
         ) {
           this.startSelection(maybeRenderable, mouseEvent.x, mouseEvent.y)
-          const event = new MouseEvent(maybeRenderable, mouseEvent)
-          maybeRenderable.processMouseEvent(event)
+          this.dispatchMouseEvent(maybeRenderable, mouseEvent)
           return true
         }
       }
@@ -1237,15 +1257,14 @@ export class CliRenderer extends EventEmitter implements RenderContext {
         this.requestRender()
       }
 
-      let event: MouseEvent | undefined = undefined
+      let event: MouseEvent | undefined
       if (maybeRenderable) {
         if (mouseEvent.type === "drag" && mouseEvent.button === MouseButton.LEFT) {
           this.setCapturedRenderable(maybeRenderable)
         } else {
           this.setCapturedRenderable(undefined)
         }
-        event = new MouseEvent(maybeRenderable, mouseEvent)
-        maybeRenderable.processMouseEvent(event)
+        event = this.dispatchMouseEvent(maybeRenderable, mouseEvent)
       } else {
         this.setCapturedRenderable(undefined)
         this.lastOverRenderable = undefined
