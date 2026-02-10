@@ -111,6 +111,7 @@ if (buildNative) {
 
     let copiedFiles = 0
     let libraryFileName: string | null = null
+    let hasNapiAddon = false
     for (const name of ["libopentui", "opentui"]) {
       for (const ext of [".so", ".dll", ".dylib"]) {
         const src = join(libDir, `${name}${ext}`)
@@ -125,6 +126,13 @@ if (buildNative) {
       }
     }
 
+    // Optional Node-API addon (`libopentui.node`)
+    const src = join(libDir, `libopentui.node`)
+    if (existsSync(src)) {
+      copyFileSync(src, join(nativeDir, "libopentui.node"))
+      hasNapiAddon = true
+    }
+
     if (copiedFiles === 0) {
       // Skip platforms that weren't built
       console.log(`Skipping ${platform}-${arch}: no libraries found`)
@@ -132,10 +140,20 @@ if (buildNative) {
       continue
     }
 
-    const indexTsContent = `const module = await import("./${libraryFileName}", { with: { type: "file" } })
+    let indexTsContent = `const module = await import("./${libraryFileName}", { with: { type: "file" } })
 const path = module.default
 export default path;
 `
+
+    if (hasNapiAddon) {
+      indexTsContent += `
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+const __dirname = dirname(fileURLToPath(import.meta.url));
+export const napiAddon = join(__dirname, "libopentui.node");
+`
+    }
+
     writeFileSync(join(nativeDir, "index.ts"), indexTsContent)
 
     writeFileSync(

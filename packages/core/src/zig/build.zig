@@ -223,6 +223,32 @@ fn buildTarget(
         },
     });
 
+    const node_addon = b.addLibrary(.{
+        .name = "libopentui",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("napi.zig"),
+            .optimize = optimize,
+            .target = target,
+        }),
+        .linkage = .dynamic,
+    });
+
+    node_addon.root_module.addImport("lib", module);
+
+    const dep_napi = b.dependency("napi", .{});
+    node_addon.root_module.addImport("napi", dep_napi.module("napi"));
+    node_addon.linker_allow_shlib_undefined = true;
+    const install_napi = b.addInstallArtifact(node_addon, .{
+        .dest_sub_path = "libopentui.node",
+        .dest_dir = .{
+            .override = .{
+                .custom = try std.fmt.allocPrint(b.allocator, "../lib/{s}", .{output_name}),
+            },
+        },
+    });
+
+    b.getInstallStep().dependOn(&install_napi.step);
+
     const build_step_name = try std.fmt.allocPrint(b.allocator, "build-{s}", .{output_name});
     const build_step = b.step(build_step_name, try std.fmt.allocPrint(b.allocator, "Build for {s}", .{description}));
     build_step.dependOn(&install_dir.step);
