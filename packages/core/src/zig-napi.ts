@@ -1,0 +1,551 @@
+import { type Pointer } from "bun:ffi"
+import { registerEnvVar } from "./lib/env"
+import { isBunfsPath } from "./lib/bunfs"
+import { existsSync } from "node:fs"
+import { OptimizedBuffer } from "./buffer"
+import { RGBA } from "./lib"
+import { TextBuffer } from "./text-buffer"
+import { type CursorStyle, type WidthMethod, DebugOverlayCorner, type Highlight, type LineInfo } from "./types"
+import type { RenderLib, CursorState, LogicalCursor, VisualCursor } from "./zig"
+import { createRequire } from "node:module"
+
+const module = await import(`@opentui/core-${process.platform}-${process.arch}/index.ts`)
+let targetAddonPath = module.napiAddon
+
+if (isBunfsPath(targetAddonPath)) {
+  targetAddonPath = targetAddonPath.replace("../", "")
+}
+
+if (!existsSync(targetAddonPath)) {
+  throw new Error(`opentui is not supported on the current platform: ${process.platform}-${process.arch}`)
+}
+
+registerEnvVar({
+  name: "OTUI_DEBUG_NAPI",
+  description: "Enable debug logging for the NAPI bindings.",
+  type: "boolean",
+  default: false,
+})
+
+registerEnvVar({
+  name: "OTUI_TRACE_NAPI",
+  description: "Enable tracing for the NAPI bindings.",
+  type: "boolean",
+  default: false,
+})
+
+// Global singleton state for NAPI tracing to prevent duplicate exit handlers
+// let globalTraceSymbols: Record<string, number[]> | null = null
+// let globalFFILogWriter: ReturnType<ReturnType<typeof Bun.file>["writer"]> | null = null
+// let exitHandlerRegistered = false
+
+export function getOpenTUILib(libPath?: string) {
+  const resolvedAddonPath = libPath || targetAddonPath
+
+  if (!existsSync(resolvedAddonPath)) {
+    throw new Error(`OpenTUI Node-API addon not found at ${resolvedAddonPath}\n`)
+  }
+
+  // TODO any
+  const require = createRequire(import.meta.url)
+  const addon = require(resolvedAddonPath)
+  const rawSymbols = { symbols: addon }
+
+  // TODO debug symbols
+  //   if (env.OTUI_DEBUG_NAPI || env.OTUI_TRACE_NAPI) {
+  //     return {
+  //       symbols: convertToDebugSymbols(rawSymbols.symbols),
+  //     }
+  //   }
+
+  return rawSymbols
+}
+
+export class NapiRenderLib implements RenderLib {
+  private opentui: ReturnType<typeof getOpenTUILib>
+  public readonly encoder: TextEncoder = new TextEncoder()
+  public readonly decoder: TextDecoder = new TextDecoder()
+  // private logCallbackWrapper: any // Store the FFI callback wrapper
+  // private eventCallbackWrapper: any // Store the FFI event callback wrapper
+  // private _nativeEvents: EventEmitter = new EventEmitter()
+  // private _anyEventHandlers: Array<(name: string, data: ArrayBuffer) => void> = []
+
+  constructor(libPath?: string) {
+    this.opentui = getOpenTUILib(libPath)
+    this.setupLogging()
+    this.setupEventBus()
+  }
+  private setupLogging() {}
+  private setLogCallback(callbarPtr: Pointer) {}
+  private setupEventBus() {}
+  private setEventCallback(callbarPtr: Pointer) {}
+
+  // starting with a really basic set of render lib functions
+  // that should let me render a simple example w/ NAPI
+
+  public createRenderer(width: number, height: number, options: { testing?: boolean; remote?: boolean } = {}) {
+    const testing = options.testing ?? false
+    const remote = options.remote ?? false
+    return this.opentui.symbols.createRenderer(width, height, testing, remote)
+  }
+
+  public destroyRenderer(renderer: Pointer): void {
+    this.opentui.symbols.destroyRenderer(renderer)
+  }
+
+  public render(renderer: Pointer, force: boolean) {
+    this.opentui.symbols.render(renderer, force)
+  }
+
+  public getNextBuffer(renderer: Pointer): OptimizedBuffer {
+    const bufferPtr = this.opentui.symbols.getNextBuffer(renderer)
+    if (!bufferPtr) {
+      throw new Error("Failed to get next buffer")
+    }
+
+    const width = this.opentui.symbols.getBufferWidth(bufferPtr)
+    const height = this.opentui.symbols.getBufferHeight(bufferPtr)
+
+    return new OptimizedBuffer(this, bufferPtr, width, height, { id: "next buffer", widthMethod: "unicode" })
+  }
+
+  public getBufferWidth(buffer: Pointer): number {
+    return this.opentui.symbols.getBufferWidth(buffer)
+  }
+
+  public getBufferHeight(buffer: Pointer): number {
+    return this.opentui.symbols.getBufferHeight(buffer)
+  }
+
+  public bufferDrawChar(
+    buffer: Pointer,
+    char: number,
+    x: number,
+    y: number,
+    fg: RGBA,
+    bg: RGBA,
+    attributes: number = 0,
+  ) {
+    this.opentui.symbols.bufferDrawChar(buffer, char, x, y, fg.buffer, bg.buffer, attributes)
+  }
+
+  // TODO - implement later
+
+  // createRenderer: (width: number, height: number, options?: { testing?: boolean; remote?: boolean }) => Pointer | null
+  // destroyRenderer!: (renderer: Pointer) => void
+  setUseThread!: (renderer: Pointer, useThread: boolean) => void
+  setBackgroundColor!: (renderer: Pointer, color: RGBA) => void
+  setRenderOffset!: (renderer: Pointer, offset: number) => void
+  updateStats!: (renderer: Pointer, time: number, fps: number, frameCallbackTime: number) => void
+  updateMemoryStats!: (renderer: Pointer, heapUsed: number, heapTotal: number, arrayBuffers: number) => void
+  // render!: (renderer: Pointer, force: boolean) => void
+  // getNextBuffer!: (renderer: Pointer) => OptimizedBuffer
+  getCurrentBuffer!: (renderer: Pointer) => OptimizedBuffer
+  createOptimizedBuffer!: (
+    width: number,
+    height: number,
+    widthMethod: WidthMethod,
+    respectAlpha?: boolean,
+    id?: string,
+  ) => OptimizedBuffer
+  destroyOptimizedBuffer!: (bufferPtr: Pointer) => void
+  drawFrameBuffer!: (
+    targetBufferPtr: Pointer,
+    destX: number,
+    destY: number,
+    bufferPtr: Pointer,
+    sourceX?: number,
+    sourceY?: number,
+    sourceWidth?: number,
+    sourceHeight?: number,
+  ) => void
+  // getBufferWidth!: (buffer: Pointer) => number
+  // getBufferHeight!: (buffer: Pointer) => number
+  bufferClear!: (buffer: Pointer, color: RGBA) => void
+  bufferGetCharPtr!: (buffer: Pointer) => Pointer
+  bufferGetFgPtr!: (buffer: Pointer) => Pointer
+  bufferGetBgPtr!: (buffer: Pointer) => Pointer
+  bufferGetAttributesPtr!: (buffer: Pointer) => Pointer
+  bufferGetRespectAlpha!: (buffer: Pointer) => boolean
+  bufferSetRespectAlpha!: (buffer: Pointer, respectAlpha: boolean) => void
+  bufferGetId!: (buffer: Pointer) => string
+  bufferGetRealCharSize!: (buffer: Pointer) => number
+  bufferWriteResolvedChars!: (buffer: Pointer, outputBuffer: Uint8Array, addLineBreaks: boolean) => number
+  bufferDrawText!: (
+    buffer: Pointer,
+    text: string,
+    x: number,
+    y: number,
+    color: RGBA,
+    bgColor?: RGBA,
+    attributes?: number,
+  ) => void
+  bufferSetCellWithAlphaBlending!: (
+    buffer: Pointer,
+    x: number,
+    y: number,
+    char: string,
+    color: RGBA,
+    bgColor: RGBA,
+    attributes?: number,
+  ) => void
+  bufferSetCell!: (
+    buffer: Pointer,
+    x: number,
+    y: number,
+    char: string,
+    color: RGBA,
+    bgColor: RGBA,
+    attributes?: number,
+  ) => void
+  bufferFillRect!: (buffer: Pointer, x: number, y: number, width: number, height: number, color: RGBA) => void
+  bufferDrawSuperSampleBuffer!: (
+    buffer: Pointer,
+    x: number,
+    y: number,
+    pixelDataPtr: Pointer,
+    pixelDataLength: number,
+    format: "bgra8unorm" | "rgba8unorm",
+    alignedBytesPerRow: number,
+  ) => void
+  bufferDrawPackedBuffer!: (
+    buffer: Pointer,
+    dataPtr: Pointer,
+    dataLen: number,
+    posX: number,
+    posY: number,
+    terminalWidthCells: number,
+    terminalHeightCells: number,
+  ) => void
+  bufferDrawGrayscaleBuffer!: (
+    buffer: Pointer,
+    posX: number,
+    posY: number,
+    intensitiesPtr: Pointer,
+    srcWidth: number,
+    srcHeight: number,
+    fg: RGBA | null,
+    bg: RGBA | null,
+  ) => void
+  bufferDrawGrayscaleBufferSupersampled!: (
+    buffer: Pointer,
+    posX: number,
+    posY: number,
+    intensitiesPtr: Pointer,
+    srcWidth: number,
+    srcHeight: number,
+    fg: RGBA | null,
+    bg: RGBA | null,
+  ) => void
+  bufferDrawBox!: (
+    buffer: Pointer,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    borderChars: Uint32Array,
+    packedOptions: number,
+    borderColor: RGBA,
+    backgroundColor: RGBA,
+    title: string | null,
+  ) => void
+  bufferResize!: (buffer: Pointer, width: number, height: number) => void
+  resizeRenderer!: (renderer: Pointer, width: number, height: number) => void
+  setCursorPosition!: (renderer: Pointer, x: number, y: number, visible: boolean) => void
+  setCursorStyle!: (renderer: Pointer, style: CursorStyle, blinking: boolean) => void
+  setCursorColor!: (renderer: Pointer, color: RGBA) => void
+  getCursorState!: (renderer: Pointer) => CursorState
+  setDebugOverlay!: (renderer: Pointer, enabled: boolean, corner: DebugOverlayCorner) => void
+  clearTerminal!: (renderer: Pointer) => void
+  setTerminalTitle!: (renderer: Pointer, title: string) => void
+  copyToClipboardOSC52!: (renderer: Pointer, target: number, payload: Uint8Array) => boolean
+  clearClipboardOSC52!: (renderer: Pointer, target: number) => boolean
+  addToHitGrid!: (renderer: Pointer, x: number, y: number, width: number, height: number, id: number) => void
+  clearCurrentHitGrid!: (renderer: Pointer) => void
+  hitGridPushScissorRect!: (renderer: Pointer, x: number, y: number, width: number, height: number) => void
+  hitGridPopScissorRect!: (renderer: Pointer) => void
+  hitGridClearScissorRects!: (renderer: Pointer) => void
+  addToCurrentHitGridClipped!: (
+    renderer: Pointer,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    id: number,
+  ) => void
+  checkHit!: (renderer: Pointer, x: number, y: number) => number
+  getHitGridDirty!: (renderer: Pointer) => boolean
+  dumpHitGrid!: (renderer: Pointer) => void
+  dumpBuffers!: (renderer: Pointer, timestamp?: number) => void
+  dumpStdoutBuffer!: (renderer: Pointer, timestamp?: number) => void
+  enableMouse!: (renderer: Pointer, enableMovement: boolean) => void
+  disableMouse!: (renderer: Pointer) => void
+  enableKittyKeyboard!: (renderer: Pointer, flags: number) => void
+  disableKittyKeyboard!: (renderer: Pointer) => void
+  setKittyKeyboardFlags!: (renderer: Pointer, flags: number) => void
+  getKittyKeyboardFlags!: (renderer: Pointer) => number
+  setupTerminal!: (renderer: Pointer, useAlternateScreen: boolean) => void
+  suspendRenderer!: (renderer: Pointer) => void
+  resumeRenderer!: (renderer: Pointer) => void
+  queryPixelResolution!: (renderer: Pointer) => void
+  writeOut!: (renderer: Pointer, data: string | Uint8Array) => void
+  createTextBuffer!: (widthMethod: WidthMethod) => TextBuffer
+  destroyTextBuffer!: (buffer: Pointer) => void
+  textBufferGetLength!: (buffer: Pointer) => number
+  textBufferGetByteSize!: (buffer: Pointer) => number
+  textBufferReset!: (buffer: Pointer) => void
+  textBufferClear!: (buffer: Pointer) => void
+  textBufferRegisterMemBuffer!: (buffer: Pointer, bytes: Uint8Array, owned?: boolean) => number
+  textBufferReplaceMemBuffer!: (buffer: Pointer, memId: number, bytes: Uint8Array, owned?: boolean) => boolean
+  textBufferClearMemRegistry!: (buffer: Pointer) => void
+  textBufferSetTextFromMem!: (buffer: Pointer, memId: number) => void
+  textBufferAppend!: (buffer: Pointer, bytes: Uint8Array) => void
+  textBufferAppendFromMemId!: (buffer: Pointer, memId: number) => void
+  textBufferLoadFile!: (buffer: Pointer, path: string) => boolean
+  textBufferSetStyledText!: (
+    buffer: Pointer,
+    chunks: Array<{ text: string; fg?: RGBA | null; bg?: RGBA | null; attributes?: number; link?: { url: string } }>,
+  ) => void
+  textBufferSetDefaultFg!: (buffer: Pointer, fg: RGBA | null) => void
+  textBufferSetDefaultBg!: (buffer: Pointer, bg: RGBA | null) => void
+  textBufferSetDefaultAttributes!: (buffer: Pointer, attributes: number | null) => void
+  textBufferResetDefaults!: (buffer: Pointer) => void
+  textBufferGetTabWidth!: (buffer: Pointer) => number
+  textBufferSetTabWidth!: (buffer: Pointer, width: number) => void
+  textBufferGetLineCount!: (buffer: Pointer) => number
+  getPlainTextBytes!: (buffer: Pointer, maxLength: number) => Uint8Array | null
+  textBufferGetTextRange!: (
+    buffer: Pointer,
+    startOffset: number,
+    endOffset: number,
+    maxLength: number,
+  ) => Uint8Array | null
+  textBufferGetTextRangeByCoords!: (
+    buffer: Pointer,
+    startRow: number,
+    startCol: number,
+    endRow: number,
+    endCol: number,
+    maxLength: number,
+  ) => Uint8Array | null
+  createTextBufferView!: (textBuffer: Pointer) => Pointer
+  destroyTextBufferView!: (view: Pointer) => void
+  textBufferViewSetSelection!: (
+    view: Pointer,
+    start: number,
+    end: number,
+    bgColor: RGBA | null,
+    fgColor: RGBA | null,
+  ) => void
+  textBufferViewResetSelection!: (view: Pointer) => void
+  textBufferViewGetSelection!: (view: Pointer) => { start: number; end: number } | null
+  textBufferViewSetLocalSelection!: (
+    view: Pointer,
+    anchorX: number,
+    anchorY: number,
+    focusX: number,
+    focusY: number,
+    bgColor: RGBA | null,
+    fgColor: RGBA | null,
+  ) => boolean
+  textBufferViewUpdateSelection!: (view: Pointer, end: number, bgColor: RGBA | null, fgColor: RGBA | null) => void
+  textBufferViewUpdateLocalSelection!: (
+    view: Pointer,
+    anchorX: number,
+    anchorY: number,
+    focusX: number,
+    focusY: number,
+    bgColor: RGBA | null,
+    fgColor: RGBA | null,
+  ) => boolean
+  textBufferViewResetLocalSelection!: (view: Pointer) => void
+  textBufferViewSetWrapWidth!: (view: Pointer, width: number) => void
+  textBufferViewSetWrapMode!: (view: Pointer, mode: "none" | "char" | "word") => void
+  textBufferViewSetViewportSize!: (view: Pointer, width: number, height: number) => void
+  textBufferViewSetViewport!: (view: Pointer, x: number, y: number, width: number, height: number) => void
+  textBufferViewGetLineInfo!: (view: Pointer) => LineInfo
+  textBufferViewGetLogicalLineInfo!: (view: Pointer) => LineInfo
+  textBufferViewGetSelectedTextBytes!: (view: Pointer, maxLength: number) => Uint8Array | null
+  textBufferViewGetPlainTextBytes!: (view: Pointer, maxLength: number) => Uint8Array | null
+  textBufferViewSetTabIndicator!: (view: Pointer, indicator: number) => void
+  textBufferViewSetTabIndicatorColor!: (view: Pointer, color: RGBA) => void
+  textBufferViewSetTruncate!: (view: Pointer, truncate: boolean) => void
+  textBufferViewMeasureForDimensions!: (
+    view: Pointer,
+    width: number,
+    height: number,
+  ) => { lineCount: number; maxWidth: number } | null
+  textBufferViewGetVirtualLineCount!: (view: Pointer) => number
+  bufferDrawTextBufferView!: (buffer: Pointer, view: Pointer, x: number, y: number) => void
+  bufferDrawEditorView!: (buffer: Pointer, view: Pointer, x: number, y: number) => void
+  createEditBuffer!: (widthMethod: WidthMethod) => Pointer
+  destroyEditBuffer!: (buffer: Pointer) => void
+  editBufferSetText!: (buffer: Pointer, textBytes: Uint8Array) => void
+  editBufferSetTextFromMem!: (buffer: Pointer, memId: number) => void
+  editBufferReplaceText!: (buffer: Pointer, textBytes: Uint8Array) => void
+  editBufferReplaceTextFromMem!: (buffer: Pointer, memId: number) => void
+  editBufferGetText!: (buffer: Pointer, maxLength: number) => Uint8Array | null
+  editBufferInsertChar!: (buffer: Pointer, char: string) => void
+  editBufferInsertText!: (buffer: Pointer, text: string) => void
+  editBufferDeleteChar!: (buffer: Pointer) => void
+  editBufferDeleteCharBackward!: (buffer: Pointer) => void
+  editBufferDeleteRange!: (
+    buffer: Pointer,
+    startLine: number,
+    startCol: number,
+    endLine: number,
+    endCol: number,
+  ) => void
+  editBufferNewLine!: (buffer: Pointer) => void
+  editBufferDeleteLine!: (buffer: Pointer) => void
+  editBufferMoveCursorLeft!: (buffer: Pointer) => void
+  editBufferMoveCursorRight!: (buffer: Pointer) => void
+  editBufferMoveCursorUp!: (buffer: Pointer) => void
+  editBufferMoveCursorDown!: (buffer: Pointer) => void
+  editBufferGotoLine!: (buffer: Pointer, line: number) => void
+  editBufferSetCursor!: (buffer: Pointer, line: number, col: number) => void
+  editBufferSetCursorToLineCol!: (buffer: Pointer, line: number, col: number) => void
+  editBufferSetCursorByOffset!: (buffer: Pointer, offset: number) => void
+  editBufferGetCursorPosition!: (buffer: Pointer) => LogicalCursor
+  editBufferGetId!: (buffer: Pointer) => number
+  editBufferGetTextBuffer!: (buffer: Pointer) => Pointer
+  editBufferDebugLogRope!: (buffer: Pointer) => void
+  editBufferUndo!: (buffer: Pointer, maxLength: number) => Uint8Array | null
+  editBufferRedo!: (buffer: Pointer, maxLength: number) => Uint8Array | null
+  editBufferCanUndo!: (buffer: Pointer) => boolean
+  editBufferCanRedo!: (buffer: Pointer) => boolean
+  editBufferClearHistory!: (buffer: Pointer) => void
+  editBufferClear!: (buffer: Pointer) => void
+  editBufferGetNextWordBoundary!: (buffer: Pointer) => { row: number; col: number; offset: number }
+  editBufferGetPrevWordBoundary!: (buffer: Pointer) => { row: number; col: number; offset: number }
+  editBufferGetEOL!: (buffer: Pointer) => { row: number; col: number; offset: number }
+  editBufferOffsetToPosition!: (buffer: Pointer, offset: number) => { row: number; col: number; offset: number } | null
+  editBufferPositionToOffset!: (buffer: Pointer, row: number, col: number) => number
+  editBufferGetLineStartOffset!: (buffer: Pointer, row: number) => number
+  editBufferGetTextRange!: (
+    buffer: Pointer,
+    startOffset: number,
+    endOffset: number,
+    maxLength: number,
+  ) => Uint8Array | null
+  editBufferGetTextRangeByCoords!: (
+    buffer: Pointer,
+    startRow: number,
+    startCol: number,
+    endRow: number,
+    endCol: number,
+    maxLength: number,
+  ) => Uint8Array | null
+  createEditorView!: (editBufferPtr: Pointer, viewportWidth: number, viewportHeight: number) => Pointer
+  destroyEditorView!: (view: Pointer) => void
+  editorViewSetViewportSize!: (view: Pointer, width: number, height: number) => void
+  editorViewSetViewport!: (
+    view: Pointer,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    moveCursor: boolean,
+  ) => void
+  editorViewGetViewport!: (view: Pointer) => { offsetY: number; offsetX: number; height: number; width: number }
+  editorViewSetScrollMargin!: (view: Pointer, margin: number) => void
+  editorViewSetWrapMode!: (view: Pointer, mode: "none" | "char" | "word") => void
+  editorViewGetVirtualLineCount!: (view: Pointer) => number
+  editorViewGetTotalVirtualLineCount!: (view: Pointer) => number
+  editorViewGetTextBufferView!: (view: Pointer) => Pointer
+  editorViewSetSelection!: (
+    view: Pointer,
+    start: number,
+    end: number,
+    bgColor: RGBA | null,
+    fgColor: RGBA | null,
+  ) => void
+  editorViewResetSelection!: (view: Pointer) => void
+  editorViewGetSelection!: (view: Pointer) => { start: number; end: number } | null
+  editorViewSetLocalSelection!: (
+    view: Pointer,
+    anchorX: number,
+    anchorY: number,
+    focusX: number,
+    focusY: number,
+    bgColor: RGBA | null,
+    fgColor: RGBA | null,
+    updateCursor: boolean,
+    followCursor: boolean,
+  ) => boolean
+  editorViewUpdateSelection!: (view: Pointer, end: number, bgColor: RGBA | null, fgColor: RGBA | null) => void
+  editorViewUpdateLocalSelection!: (
+    view: Pointer,
+    anchorX: number,
+    anchorY: number,
+    focusX: number,
+    focusY: number,
+    bgColor: RGBA | null,
+    fgColor: RGBA | null,
+    updateCursor: boolean,
+    followCursor: boolean,
+  ) => boolean
+  editorViewResetLocalSelection!: (view: Pointer) => void
+  editorViewGetSelectedTextBytes!: (view: Pointer, maxLength: number) => Uint8Array | null
+  editorViewGetCursor!: (view: Pointer) => { row: number; col: number }
+  editorViewGetText!: (view: Pointer, maxLength: number) => Uint8Array | null
+  editorViewGetVisualCursor!: (view: Pointer) => VisualCursor
+  editorViewMoveUpVisual!: (view: Pointer) => void
+  editorViewMoveDownVisual!: (view: Pointer) => void
+  editorViewDeleteSelectedText!: (view: Pointer) => void
+  editorViewSetCursorByOffset!: (view: Pointer, offset: number) => void
+  editorViewGetNextWordBoundary!: (view: Pointer) => VisualCursor
+  editorViewGetPrevWordBoundary!: (view: Pointer) => VisualCursor
+  editorViewGetEOL!: (view: Pointer) => VisualCursor
+  editorViewGetVisualSOL!: (view: Pointer) => VisualCursor
+  editorViewGetVisualEOL!: (view: Pointer) => VisualCursor
+  editorViewGetLineInfo!: (view: Pointer) => LineInfo
+  editorViewGetLogicalLineInfo!: (view: Pointer) => LineInfo
+  editorViewSetPlaceholderStyledText!: (
+    view: Pointer,
+    chunks: Array<{ text: string; fg?: RGBA | null; bg?: RGBA | null; attributes?: number }>,
+  ) => void
+  editorViewSetTabIndicator!: (view: Pointer, indicator: number) => void
+  editorViewSetTabIndicatorColor!: (view: Pointer, color: RGBA) => void
+  bufferPushScissorRect!: (buffer: Pointer, x: number, y: number, width: number, height: number) => void
+  bufferPopScissorRect!: (buffer: Pointer) => void
+  bufferClearScissorRects!: (buffer: Pointer) => void
+  bufferPushOpacity!: (buffer: Pointer, opacity: number) => void
+  bufferPopOpacity!: (buffer: Pointer) => void
+  bufferGetCurrentOpacity!: (buffer: Pointer) => number
+  bufferClearOpacity!: (buffer: Pointer) => void
+  textBufferAddHighlightByCharRange!: (buffer: Pointer, highlight: Highlight) => void
+  textBufferAddHighlight!: (buffer: Pointer, lineIdx: number, highlight: Highlight) => void
+  textBufferRemoveHighlightsByRef!: (buffer: Pointer, hlRef: number) => void
+  textBufferClearLineHighlights!: (buffer: Pointer, lineIdx: number) => void
+  textBufferClearAllHighlights!: (buffer: Pointer) => void
+  textBufferSetSyntaxStyle!: (buffer: Pointer, style: Pointer | null) => void
+  textBufferGetLineHighlights!: (buffer: Pointer, lineIdx: number) => Array<Highlight>
+  textBufferGetHighlightCount!: (buffer: Pointer) => number
+  getArenaAllocatedBytes!: () => number
+  createSyntaxStyle!: () => Pointer
+  destroySyntaxStyle!: (style: Pointer) => void
+  syntaxStyleRegister!: (style: Pointer, name: string, fg: RGBA | null, bg: RGBA | null, attributes: number) => number
+  syntaxStyleResolveByName!: (style: Pointer, name: string) => number | null
+  syntaxStyleGetStyleCount!: (style: Pointer) => number
+  getTerminalCapabilities!: (renderer: Pointer) => any
+  processCapabilityResponse!: (renderer: Pointer, response: string) => void
+  encodeUnicode!: (
+    text: string,
+    widthMethod: WidthMethod,
+  ) => { ptr: Pointer; data: Array<{ width: number; char: number }> } | null
+  freeUnicode!: (encoded: { ptr: Pointer; data: Array<{ width: number; char: number }> }) => void
+  // bufferDrawChar!: (
+  //   buffer: Pointer,
+  //   char: number,
+  //   x: number,
+  //   y: number,
+  //   fg: RGBA,
+  //   bg: RGBA,
+  //   attributes?: number,
+  // ) => void
+  onNativeEvent!: (name: string, handler: (data: ArrayBuffer) => void) => void
+  onceNativeEvent!: (name: string, handler: (data: ArrayBuffer) => void) => void
+  offNativeEvent!: (name: string, handler: (data: ArrayBuffer) => void) => void
+  onAnyNativeEvent!: (handler: (name: string, data: ArrayBuffer) => void) => void
+}
