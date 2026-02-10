@@ -22,11 +22,11 @@ pub const CliRenderer = renderer.CliRenderer;
 pub const Terminal = terminal.Terminal;
 pub const RGBA = buffer.RGBA;
 
-export fn setLogCallback(callback: ?*const fn (level: u8, msgPtr: [*]const u8, msgLen: usize) callconv(.c) void) void {
+pub export fn setLogCallback(callback: ?*const fn (level: u8, msgPtr: [*]const u8, msgLen: usize) callconv(.c) void) void {
     logger.setLogCallback(callback);
 }
 
-export fn setEventCallback(callback: ?*const fn (namePtr: [*]const u8, nameLen: usize, dataPtr: [*]const u8, dataLen: usize) callconv(.c) void) void {
+pub export fn setEventCallback(callback: ?*const fn (namePtr: [*]const u8, nameLen: usize, dataPtr: [*]const u8, dataLen: usize) callconv(.c) void) void {
     event_bus.setEventCallback(callback);
 }
 
@@ -35,11 +35,11 @@ const globalAllocator = gpa.allocator();
 var arena = std.heap.ArenaAllocator.init(globalAllocator);
 const globalArena = arena.allocator();
 
-export fn getArenaAllocatedBytes() usize {
+pub export fn getArenaAllocatedBytes() usize {
     return arena.queryCapacity();
 }
 
-export fn createRenderer(width: u32, height: u32, testing: bool, remote: bool) ?*renderer.CliRenderer {
+pub export fn createRenderer(width: u32, height: u32, testing: bool, remote: bool) ?*renderer.CliRenderer {
     if (width == 0 or height == 0) {
         logger.warn("Invalid renderer dimensions: {}x{}", .{ width, height });
         return null;
@@ -53,35 +53,35 @@ export fn createRenderer(width: u32, height: u32, testing: bool, remote: bool) ?
     };
 }
 
-export fn setUseThread(rendererPtr: *renderer.CliRenderer, useThread: bool) void {
+pub export fn setUseThread(rendererPtr: *renderer.CliRenderer, useThread: bool) void {
     rendererPtr.setUseThread(useThread);
 }
 
-export fn destroyRenderer(rendererPtr: *renderer.CliRenderer) void {
+pub export fn destroyRenderer(rendererPtr: *renderer.CliRenderer) void {
     rendererPtr.destroy();
 }
 
-export fn setBackgroundColor(rendererPtr: *renderer.CliRenderer, color: [*]const f32) void {
+pub export fn setBackgroundColor(rendererPtr: *renderer.CliRenderer, color: [*]const f32) void {
     rendererPtr.setBackgroundColor(utils.f32PtrToRGBA(color));
 }
 
-export fn setRenderOffset(rendererPtr: *renderer.CliRenderer, offset: u32) void {
+pub export fn setRenderOffset(rendererPtr: *renderer.CliRenderer, offset: u32) void {
     rendererPtr.setRenderOffset(offset);
 }
 
-export fn updateStats(rendererPtr: *renderer.CliRenderer, time: f64, fps: u32, frameCallbackTime: f64) void {
+pub export fn updateStats(rendererPtr: *renderer.CliRenderer, time: f64, fps: u32, frameCallbackTime: f64) void {
     rendererPtr.updateStats(time, fps, frameCallbackTime);
 }
 
-export fn updateMemoryStats(rendererPtr: *renderer.CliRenderer, heapUsed: u32, heapTotal: u32, arrayBuffers: u32) void {
+pub export fn updateMemoryStats(rendererPtr: *renderer.CliRenderer, heapUsed: u32, heapTotal: u32, arrayBuffers: u32) void {
     rendererPtr.updateMemoryStats(heapUsed, heapTotal, arrayBuffers);
 }
 
-export fn getNextBuffer(rendererPtr: *renderer.CliRenderer) *buffer.OptimizedBuffer {
+pub export fn getNextBuffer(rendererPtr: *renderer.CliRenderer) *buffer.OptimizedBuffer {
     return rendererPtr.getNextBuffer();
 }
 
-export fn getCurrentBuffer(rendererPtr: *renderer.CliRenderer) *buffer.OptimizedBuffer {
+pub export fn getCurrentBuffer(rendererPtr: *renderer.CliRenderer) *buffer.OptimizedBuffer {
     return rendererPtr.getCurrentBuffer();
 }
 
@@ -90,33 +90,33 @@ const OutputSlice = extern struct {
     len: usize,
 };
 
-export fn getLastOutputForTest(rendererPtr: *renderer.CliRenderer, outSlice: *OutputSlice) void {
+pub export fn getLastOutputForTest(rendererPtr: *renderer.CliRenderer, outSlice: *OutputSlice) void {
     const output = rendererPtr.getLastOutputForTest();
     outSlice.ptr = output.ptr;
     outSlice.len = output.len;
 }
 
-export fn setHyperlinksCapability(rendererPtr: *renderer.CliRenderer, enabled: bool) void {
+pub export fn setHyperlinksCapability(rendererPtr: *renderer.CliRenderer, enabled: bool) void {
     rendererPtr.terminal.caps.hyperlinks = enabled;
 }
 
-export fn clearGlobalLinkPool() void {
+pub export fn clearGlobalLinkPool() void {
     link.deinitGlobalLinkPool();
 }
 
-export fn getBufferWidth(bufferPtr: *buffer.OptimizedBuffer) u32 {
+pub export fn getBufferWidth(bufferPtr: *buffer.OptimizedBuffer) u32 {
     return bufferPtr.width;
 }
 
-export fn getBufferHeight(bufferPtr: *buffer.OptimizedBuffer) u32 {
+pub export fn getBufferHeight(bufferPtr: *buffer.OptimizedBuffer) u32 {
     return bufferPtr.height;
 }
 
-export fn render(rendererPtr: *renderer.CliRenderer, force: bool) void {
+pub export fn render(rendererPtr: *renderer.CliRenderer, force: bool) void {
     rendererPtr.render(force);
 }
 
-export fn createOptimizedBuffer(width: u32, height: u32, respectAlpha: bool, widthMethod: u8, idPtr: [*]const u8, idLen: usize) ?*buffer.OptimizedBuffer {
+pub export fn createOptimizedBuffer(width: u32, height: u32, respectAlpha: bool, widthMethod: u8, idPtr: [*]const u8, idLen: usize) ?*buffer.OptimizedBuffer {
     if (width == 0 or height == 0) {
         logger.warn("Invalid buffer dimensions: {}x{}", .{ width, height });
         return null;
@@ -139,15 +139,15 @@ export fn createOptimizedBuffer(width: u32, height: u32, respectAlpha: bool, wid
     };
 }
 
-export fn destroyOptimizedBuffer(bufferPtr: *buffer.OptimizedBuffer) void {
+pub export fn destroyOptimizedBuffer(bufferPtr: *buffer.OptimizedBuffer) void {
     bufferPtr.deinit();
 }
 
-export fn destroyFrameBuffer(frameBufferPtr: *buffer.OptimizedBuffer) void {
+pub export fn destroyFrameBuffer(frameBufferPtr: *buffer.OptimizedBuffer) void {
     destroyOptimizedBuffer(frameBufferPtr);
 }
 
-export fn drawFrameBuffer(targetPtr: *buffer.OptimizedBuffer, destX: i32, destY: i32, frameBuffer: *buffer.OptimizedBuffer, sourceX: u32, sourceY: u32, sourceWidth: u32, sourceHeight: u32) void {
+pub export fn drawFrameBuffer(targetPtr: *buffer.OptimizedBuffer, destX: i32, destY: i32, frameBuffer: *buffer.OptimizedBuffer, sourceX: u32, sourceY: u32, sourceWidth: u32, sourceHeight: u32) void {
     const srcX = if (sourceX == 0) null else sourceX;
     const srcY = if (sourceY == 0) null else sourceY;
     const srcWidth = if (sourceWidth == 0) null else sourceWidth;
@@ -156,7 +156,7 @@ export fn drawFrameBuffer(targetPtr: *buffer.OptimizedBuffer, destX: i32, destY:
     targetPtr.drawFrameBuffer(destX, destY, frameBuffer, srcX, srcY, srcWidth, srcHeight);
 }
 
-export fn setCursorPosition(rendererPtr: *renderer.CliRenderer, x: i32, y: i32, visible: bool) void {
+pub export fn setCursorPosition(rendererPtr: *renderer.CliRenderer, x: i32, y: i32, visible: bool) void {
     rendererPtr.terminal.setCursorPosition(@intCast(@max(1, x)), @intCast(@max(1, y)), visible);
 }
 
@@ -183,7 +183,7 @@ pub const ExternalCapabilities = extern struct {
     term_from_xtversion: bool,
 };
 
-export fn getTerminalCapabilities(rendererPtr: *renderer.CliRenderer, capsPtr: *ExternalCapabilities) void {
+pub export fn getTerminalCapabilities(rendererPtr: *renderer.CliRenderer, capsPtr: *ExternalCapabilities) void {
     const caps = rendererPtr.getTerminalCapabilities();
     const term = &rendererPtr.terminal;
 
@@ -211,18 +211,18 @@ export fn getTerminalCapabilities(rendererPtr: *renderer.CliRenderer, capsPtr: *
     };
 }
 
-export fn processCapabilityResponse(rendererPtr: *renderer.CliRenderer, responsePtr: [*]const u8, responseLen: usize) void {
+pub export fn processCapabilityResponse(rendererPtr: *renderer.CliRenderer, responsePtr: [*]const u8, responseLen: usize) void {
     const response = responsePtr[0..responseLen];
     rendererPtr.processCapabilityResponse(response);
 }
 
-export fn setCursorStyle(rendererPtr: *renderer.CliRenderer, stylePtr: [*]const u8, styleLen: usize, blinking: bool) void {
+pub export fn setCursorStyle(rendererPtr: *renderer.CliRenderer, stylePtr: [*]const u8, styleLen: usize, blinking: bool) void {
     const style = stylePtr[0..styleLen];
     const cursorStyle = std.meta.stringToEnum(terminal.CursorStyle, style) orelse .block;
     rendererPtr.terminal.setCursorStyle(cursorStyle, blinking);
 }
 
-export fn setCursorColor(rendererPtr: *renderer.CliRenderer, color: [*]const f32) void {
+pub export fn setCursorColor(rendererPtr: *renderer.CliRenderer, color: [*]const f32) void {
     rendererPtr.terminal.setCursorColor(utils.f32PtrToRGBA(color));
 }
 
@@ -238,7 +238,7 @@ pub const ExternalCursorState = extern struct {
     a: f32,
 };
 
-export fn getCursorState(rendererPtr: *renderer.CliRenderer, outPtr: *ExternalCursorState) void {
+pub export fn getCursorState(rendererPtr: *renderer.CliRenderer, outPtr: *ExternalCursorState) void {
     const pos = rendererPtr.terminal.getCursorPosition();
     const style = rendererPtr.terminal.getCursorStyle();
     const color = rendererPtr.terminal.getCursorColor();
@@ -262,7 +262,7 @@ export fn getCursorState(rendererPtr: *renderer.CliRenderer, outPtr: *ExternalCu
     };
 }
 
-export fn setDebugOverlay(rendererPtr: *renderer.CliRenderer, enabled: bool, corner: u8) void {
+pub export fn setDebugOverlay(rendererPtr: *renderer.CliRenderer, enabled: bool, corner: u8) void {
     const cornerEnum: renderer.DebugOverlayCorner = switch (corner) {
         0 => .topLeft,
         1 => .topRight,
@@ -273,84 +273,84 @@ export fn setDebugOverlay(rendererPtr: *renderer.CliRenderer, enabled: bool, cor
     rendererPtr.setDebugOverlay(enabled, cornerEnum);
 }
 
-export fn clearTerminal(rendererPtr: *renderer.CliRenderer) void {
+pub export fn clearTerminal(rendererPtr: *renderer.CliRenderer) void {
     rendererPtr.clearTerminal();
 }
 
-export fn setTerminalTitle(rendererPtr: *renderer.CliRenderer, titlePtr: [*]const u8, titleLen: usize) void {
+pub export fn setTerminalTitle(rendererPtr: *renderer.CliRenderer, titlePtr: [*]const u8, titleLen: usize) void {
     const title = titlePtr[0..titleLen];
     rendererPtr.setTerminalTitle(title);
 }
 
-export fn copyToClipboardOSC52(rendererPtr: *renderer.CliRenderer, target: u8, payloadPtr: [*]const u8, payloadLen: usize) bool {
+pub export fn copyToClipboardOSC52(rendererPtr: *renderer.CliRenderer, target: u8, payloadPtr: [*]const u8, payloadLen: usize) bool {
     const targetEnum = std.meta.intToEnum(terminal.ClipboardTarget, target) catch .clipboard;
     const payload = payloadPtr[0..payloadLen];
     return rendererPtr.copyToClipboardOSC52(targetEnum, payload);
 }
 
-export fn clearClipboardOSC52(rendererPtr: *renderer.CliRenderer, target: u8) bool {
+pub export fn clearClipboardOSC52(rendererPtr: *renderer.CliRenderer, target: u8) bool {
     const targetEnum = std.meta.intToEnum(terminal.ClipboardTarget, target) catch .clipboard;
     return rendererPtr.clearClipboardOSC52(targetEnum);
 }
 
 // Buffer functions
-export fn bufferClear(bufferPtr: *buffer.OptimizedBuffer, bg: [*]const f32) void {
+pub export fn bufferClear(bufferPtr: *buffer.OptimizedBuffer, bg: [*]const f32) void {
     bufferPtr.clear(utils.f32PtrToRGBA(bg), null) catch {};
 }
 
-export fn bufferGetCharPtr(bufferPtr: *buffer.OptimizedBuffer) [*]u32 {
+pub export fn bufferGetCharPtr(bufferPtr: *buffer.OptimizedBuffer) [*]u32 {
     return bufferPtr.getCharPtr();
 }
 
-export fn bufferGetFgPtr(bufferPtr: *buffer.OptimizedBuffer) [*]RGBA {
+pub export fn bufferGetFgPtr(bufferPtr: *buffer.OptimizedBuffer) [*]RGBA {
     return bufferPtr.getFgPtr();
 }
 
-export fn bufferGetBgPtr(bufferPtr: *buffer.OptimizedBuffer) [*]RGBA {
+pub export fn bufferGetBgPtr(bufferPtr: *buffer.OptimizedBuffer) [*]RGBA {
     return bufferPtr.getBgPtr();
 }
 
-export fn bufferGetAttributesPtr(bufferPtr: *buffer.OptimizedBuffer) [*]u32 {
+pub export fn bufferGetAttributesPtr(bufferPtr: *buffer.OptimizedBuffer) [*]u32 {
     return bufferPtr.getAttributesPtr();
 }
 
-export fn bufferGetRespectAlpha(bufferPtr: *buffer.OptimizedBuffer) bool {
+pub export fn bufferGetRespectAlpha(bufferPtr: *buffer.OptimizedBuffer) bool {
     return bufferPtr.getRespectAlpha();
 }
 
-export fn bufferSetRespectAlpha(bufferPtr: *buffer.OptimizedBuffer, respectAlpha: bool) void {
+pub export fn bufferSetRespectAlpha(bufferPtr: *buffer.OptimizedBuffer, respectAlpha: bool) void {
     bufferPtr.setRespectAlpha(respectAlpha);
 }
 
-export fn bufferGetId(bufferPtr: *buffer.OptimizedBuffer, outPtr: [*]u8, maxLen: usize) usize {
+pub export fn bufferGetId(bufferPtr: *buffer.OptimizedBuffer, outPtr: [*]u8, maxLen: usize) usize {
     const id = bufferPtr.getId();
     const copyLen = @min(id.len, maxLen);
     @memcpy(outPtr[0..copyLen], id[0..copyLen]);
     return copyLen;
 }
 
-export fn bufferGetRealCharSize(bufferPtr: *buffer.OptimizedBuffer) u32 {
+pub export fn bufferGetRealCharSize(bufferPtr: *buffer.OptimizedBuffer) u32 {
     return bufferPtr.getRealCharSize();
 }
 
-export fn bufferWriteResolvedChars(bufferPtr: *buffer.OptimizedBuffer, outputPtr: [*]u8, outputLen: usize, addLineBreaks: bool) u32 {
+pub export fn bufferWriteResolvedChars(bufferPtr: *buffer.OptimizedBuffer, outputPtr: [*]u8, outputLen: usize, addLineBreaks: bool) u32 {
     const output_slice = outputPtr[0..outputLen];
     return bufferPtr.writeResolvedChars(output_slice, addLineBreaks) catch 0;
 }
 
-export fn bufferDrawText(bufferPtr: *buffer.OptimizedBuffer, text: [*]const u8, textLen: usize, x: u32, y: u32, fg: [*]const f32, bg: ?[*]const f32, attributes: u32) void {
+pub export fn bufferDrawText(bufferPtr: *buffer.OptimizedBuffer, text: [*]const u8, textLen: usize, x: u32, y: u32, fg: [*]const f32, bg: ?[*]const f32, attributes: u32) void {
     const rgbaFg = utils.f32PtrToRGBA(fg);
     const rgbaBg = if (bg) |bgPtr| utils.f32PtrToRGBA(bgPtr) else null;
     bufferPtr.drawText(text[0..textLen], x, y, rgbaFg, rgbaBg, attributes) catch {};
 }
 
-export fn bufferSetCellWithAlphaBlending(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, char: u32, fg: [*]const f32, bg: [*]const f32, attributes: u32) void {
+pub export fn bufferSetCellWithAlphaBlending(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, char: u32, fg: [*]const f32, bg: [*]const f32, attributes: u32) void {
     const rgbaFg = utils.f32PtrToRGBA(fg);
     const rgbaBg = utils.f32PtrToRGBA(bg);
     bufferPtr.setCellWithAlphaBlending(x, y, char, rgbaFg, rgbaBg, attributes) catch {};
 }
 
-export fn bufferSetCell(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, char: u32, fg: [*]const f32, bg: [*]const f32, attributes: u32) void {
+pub export fn bufferSetCell(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, char: u32, fg: [*]const f32, bg: [*]const f32, attributes: u32) void {
     const rgbaFg = utils.f32PtrToRGBA(fg);
     const rgbaBg = utils.f32PtrToRGBA(bg);
     const cell = buffer.Cell{
@@ -362,67 +362,67 @@ export fn bufferSetCell(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, char
     bufferPtr.set(x, y, cell);
 }
 
-export fn bufferFillRect(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, width: u32, height: u32, bg: [*]const f32) void {
+pub export fn bufferFillRect(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, width: u32, height: u32, bg: [*]const f32) void {
     const rgbaBg = utils.f32PtrToRGBA(bg);
     bufferPtr.fillRect(x, y, width, height, rgbaBg) catch {};
 }
 
-export fn bufferDrawPackedBuffer(bufferPtr: *buffer.OptimizedBuffer, data: [*]const u8, dataLen: usize, posX: u32, posY: u32, terminalWidthCells: u32, terminalHeightCells: u32) void {
+pub export fn bufferDrawPackedBuffer(bufferPtr: *buffer.OptimizedBuffer, data: [*]const u8, dataLen: usize, posX: u32, posY: u32, terminalWidthCells: u32, terminalHeightCells: u32) void {
     bufferPtr.drawPackedBuffer(data, dataLen, posX, posY, terminalWidthCells, terminalHeightCells);
 }
 
-export fn bufferDrawGrayscaleBuffer(bufferPtr: *buffer.OptimizedBuffer, posX: i32, posY: i32, intensities: [*]const f32, srcWidth: u32, srcHeight: u32, fg: ?[*]const f32, bg: ?[*]const f32) void {
+pub export fn bufferDrawGrayscaleBuffer(bufferPtr: *buffer.OptimizedBuffer, posX: i32, posY: i32, intensities: [*]const f32, srcWidth: u32, srcHeight: u32, fg: ?[*]const f32, bg: ?[*]const f32) void {
     const rgbaFg = if (fg) |fgPtr| utils.f32PtrToRGBA(fgPtr) else null;
     const rgbaBg = if (bg) |bgPtr| utils.f32PtrToRGBA(bgPtr) else null;
     bufferPtr.drawGrayscaleBuffer(posX, posY, intensities, srcWidth, srcHeight, rgbaFg, rgbaBg);
 }
 
-export fn bufferDrawGrayscaleBufferSupersampled(bufferPtr: *buffer.OptimizedBuffer, posX: i32, posY: i32, intensities: [*]const f32, srcWidth: u32, srcHeight: u32, fg: ?[*]const f32, bg: ?[*]const f32) void {
+pub export fn bufferDrawGrayscaleBufferSupersampled(bufferPtr: *buffer.OptimizedBuffer, posX: i32, posY: i32, intensities: [*]const f32, srcWidth: u32, srcHeight: u32, fg: ?[*]const f32, bg: ?[*]const f32) void {
     const rgbaFg = if (fg) |fgPtr| utils.f32PtrToRGBA(fgPtr) else null;
     const rgbaBg = if (bg) |bgPtr| utils.f32PtrToRGBA(bgPtr) else null;
     bufferPtr.drawGrayscaleBufferSupersampled(posX, posY, intensities, srcWidth, srcHeight, rgbaFg, rgbaBg);
 }
 
-export fn bufferPushScissorRect(bufferPtr: *buffer.OptimizedBuffer, x: i32, y: i32, width: u32, height: u32) void {
+pub export fn bufferPushScissorRect(bufferPtr: *buffer.OptimizedBuffer, x: i32, y: i32, width: u32, height: u32) void {
     bufferPtr.pushScissorRect(x, y, width, height) catch {};
 }
 
-export fn bufferPopScissorRect(bufferPtr: *buffer.OptimizedBuffer) void {
+pub export fn bufferPopScissorRect(bufferPtr: *buffer.OptimizedBuffer) void {
     bufferPtr.popScissorRect();
 }
 
-export fn bufferClearScissorRects(bufferPtr: *buffer.OptimizedBuffer) void {
+pub export fn bufferClearScissorRects(bufferPtr: *buffer.OptimizedBuffer) void {
     bufferPtr.clearScissorRects();
 }
 
 // Opacity stack functions
-export fn bufferPushOpacity(bufferPtr: *buffer.OptimizedBuffer, opacity: f32) void {
+pub export fn bufferPushOpacity(bufferPtr: *buffer.OptimizedBuffer, opacity: f32) void {
     bufferPtr.pushOpacity(opacity) catch {};
 }
 
-export fn bufferPopOpacity(bufferPtr: *buffer.OptimizedBuffer) void {
+pub export fn bufferPopOpacity(bufferPtr: *buffer.OptimizedBuffer) void {
     bufferPtr.popOpacity();
 }
 
-export fn bufferGetCurrentOpacity(bufferPtr: *buffer.OptimizedBuffer) f32 {
+pub export fn bufferGetCurrentOpacity(bufferPtr: *buffer.OptimizedBuffer) f32 {
     return bufferPtr.getCurrentOpacity();
 }
 
-export fn bufferClearOpacity(bufferPtr: *buffer.OptimizedBuffer) void {
+pub export fn bufferClearOpacity(bufferPtr: *buffer.OptimizedBuffer) void {
     bufferPtr.clearOpacity();
 }
 
-export fn bufferDrawSuperSampleBuffer(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, pixelData: [*]const u8, len: usize, format: u8, alignedBytesPerRow: u32) void {
+pub export fn bufferDrawSuperSampleBuffer(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, pixelData: [*]const u8, len: usize, format: u8, alignedBytesPerRow: u32) void {
     bufferPtr.drawSuperSampleBuffer(x, y, pixelData, len, format, alignedBytesPerRow) catch {};
 }
 
-export fn linkAlloc(urlPtr: [*]const u8, urlLen: usize) u32 {
+pub export fn linkAlloc(urlPtr: [*]const u8, urlLen: usize) u32 {
     const url = urlPtr[0..urlLen];
     const link_pool = link.initGlobalLinkPool(globalArena);
     return link_pool.alloc(url) catch 0;
 }
 
-export fn linkGetUrl(id: u32, outPtr: [*]u8, maxLen: usize) usize {
+pub export fn linkGetUrl(id: u32, outPtr: [*]u8, maxLen: usize) usize {
     const link_pool = link.initGlobalLinkPool(globalArena);
     const url_bytes = link_pool.get(id) catch return 0;
     const copyLen = @min(url_bytes.len, maxLen);
@@ -430,15 +430,15 @@ export fn linkGetUrl(id: u32, outPtr: [*]u8, maxLen: usize) usize {
     return copyLen;
 }
 
-export fn attributesWithLink(baseAttributes: u32, linkId: u32) u32 {
+pub export fn attributesWithLink(baseAttributes: u32, linkId: u32) u32 {
     return ansi.TextAttributes.setLinkId(baseAttributes, linkId);
 }
 
-export fn attributesGetLinkId(attributes: u32) u32 {
+pub export fn attributesGetLinkId(attributes: u32) u32 {
     return ansi.TextAttributes.getLinkId(attributes);
 }
 
-export fn bufferDrawBox(
+pub export fn bufferDrawBox(
     bufferPtr: *buffer.OptimizedBuffer,
     x: i32,
     y: i32,
@@ -478,105 +478,105 @@ export fn bufferDrawBox(
     ) catch {};
 }
 
-export fn bufferResize(bufferPtr: *buffer.OptimizedBuffer, width: u32, height: u32) void {
+pub export fn bufferResize(bufferPtr: *buffer.OptimizedBuffer, width: u32, height: u32) void {
     bufferPtr.resize(width, height) catch {};
 }
 
-export fn resizeRenderer(rendererPtr: *renderer.CliRenderer, width: u32, height: u32) void {
+pub export fn resizeRenderer(rendererPtr: *renderer.CliRenderer, width: u32, height: u32) void {
     rendererPtr.resize(width, height) catch {};
 }
 
-export fn addToHitGrid(rendererPtr: *renderer.CliRenderer, x: i32, y: i32, width: u32, height: u32, id: u32) void {
+pub export fn addToHitGrid(rendererPtr: *renderer.CliRenderer, x: i32, y: i32, width: u32, height: u32, id: u32) void {
     rendererPtr.addToHitGrid(x, y, width, height, id);
 }
 
-export fn clearCurrentHitGrid(rendererPtr: *renderer.CliRenderer) void {
+pub export fn clearCurrentHitGrid(rendererPtr: *renderer.CliRenderer) void {
     rendererPtr.clearCurrentHitGrid();
 }
 
-export fn hitGridPushScissorRect(rendererPtr: *renderer.CliRenderer, x: i32, y: i32, width: u32, height: u32) void {
+pub export fn hitGridPushScissorRect(rendererPtr: *renderer.CliRenderer, x: i32, y: i32, width: u32, height: u32) void {
     rendererPtr.hitGridPushScissorRect(x, y, width, height);
 }
 
-export fn hitGridPopScissorRect(rendererPtr: *renderer.CliRenderer) void {
+pub export fn hitGridPopScissorRect(rendererPtr: *renderer.CliRenderer) void {
     rendererPtr.hitGridPopScissorRect();
 }
 
-export fn hitGridClearScissorRects(rendererPtr: *renderer.CliRenderer) void {
+pub export fn hitGridClearScissorRects(rendererPtr: *renderer.CliRenderer) void {
     rendererPtr.hitGridClearScissorRects();
 }
 
-export fn addToCurrentHitGridClipped(rendererPtr: *renderer.CliRenderer, x: i32, y: i32, width: u32, height: u32, id: u32) void {
+pub export fn addToCurrentHitGridClipped(rendererPtr: *renderer.CliRenderer, x: i32, y: i32, width: u32, height: u32, id: u32) void {
     rendererPtr.addToCurrentHitGridClipped(x, y, width, height, id);
 }
 
-export fn checkHit(rendererPtr: *renderer.CliRenderer, x: u32, y: u32) u32 {
+pub export fn checkHit(rendererPtr: *renderer.CliRenderer, x: u32, y: u32) u32 {
     return rendererPtr.checkHit(x, y);
 }
 
-export fn getHitGridDirty(rendererPtr: *renderer.CliRenderer) bool {
+pub export fn getHitGridDirty(rendererPtr: *renderer.CliRenderer) bool {
     return rendererPtr.getHitGridDirty();
 }
 
-export fn dumpHitGrid(rendererPtr: *renderer.CliRenderer) void {
+pub export fn dumpHitGrid(rendererPtr: *renderer.CliRenderer) void {
     rendererPtr.dumpHitGrid();
 }
 
-export fn dumpBuffers(rendererPtr: *renderer.CliRenderer, timestamp: i64) void {
+pub export fn dumpBuffers(rendererPtr: *renderer.CliRenderer, timestamp: i64) void {
     rendererPtr.dumpBuffers(timestamp);
 }
 
-export fn dumpStdoutBuffer(rendererPtr: *renderer.CliRenderer, timestamp: i64) void {
+pub export fn dumpStdoutBuffer(rendererPtr: *renderer.CliRenderer, timestamp: i64) void {
     rendererPtr.dumpStdoutBuffer(timestamp);
 }
 
-export fn enableMouse(rendererPtr: *renderer.CliRenderer, enableMovement: bool) void {
+pub export fn enableMouse(rendererPtr: *renderer.CliRenderer, enableMovement: bool) void {
     rendererPtr.enableMouse(enableMovement);
 }
 
-export fn disableMouse(rendererPtr: *renderer.CliRenderer) void {
+pub export fn disableMouse(rendererPtr: *renderer.CliRenderer) void {
     rendererPtr.disableMouse();
 }
 
-export fn queryPixelResolution(rendererPtr: *renderer.CliRenderer) void {
+pub export fn queryPixelResolution(rendererPtr: *renderer.CliRenderer) void {
     rendererPtr.queryPixelResolution();
 }
 
-export fn enableKittyKeyboard(rendererPtr: *renderer.CliRenderer, flags: u8) void {
+pub export fn enableKittyKeyboard(rendererPtr: *renderer.CliRenderer, flags: u8) void {
     rendererPtr.enableKittyKeyboard(flags);
 }
 
-export fn disableKittyKeyboard(rendererPtr: *renderer.CliRenderer) void {
+pub export fn disableKittyKeyboard(rendererPtr: *renderer.CliRenderer) void {
     rendererPtr.disableKittyKeyboard();
 }
 
-export fn setKittyKeyboardFlags(rendererPtr: *renderer.CliRenderer, flags: u8) void {
+pub export fn setKittyKeyboardFlags(rendererPtr: *renderer.CliRenderer, flags: u8) void {
     rendererPtr.setKittyKeyboardFlags(flags);
 }
 
-export fn getKittyKeyboardFlags(rendererPtr: *renderer.CliRenderer) u8 {
+pub export fn getKittyKeyboardFlags(rendererPtr: *renderer.CliRenderer) u8 {
     return rendererPtr.getKittyKeyboardFlags();
 }
 
-export fn setupTerminal(rendererPtr: *renderer.CliRenderer, useAlternateScreen: bool) void {
+pub export fn setupTerminal(rendererPtr: *renderer.CliRenderer, useAlternateScreen: bool) void {
     rendererPtr.setupTerminal(useAlternateScreen);
 }
 
-export fn suspendRenderer(rendererPtr: *renderer.CliRenderer) void {
+pub export fn suspendRenderer(rendererPtr: *renderer.CliRenderer) void {
     rendererPtr.suspendRenderer();
 }
 
-export fn resumeRenderer(rendererPtr: *renderer.CliRenderer) void {
+pub export fn resumeRenderer(rendererPtr: *renderer.CliRenderer) void {
     rendererPtr.resumeRenderer();
 }
 
-export fn writeOut(rendererPtr: *renderer.CliRenderer, dataPtr: [*]const u8, dataLen: usize) void {
+pub export fn writeOut(rendererPtr: *renderer.CliRenderer, dataPtr: [*]const u8, dataLen: usize) void {
     if (dataLen == 0) return;
     const data = dataPtr[0..dataLen];
     rendererPtr.writeOut(data);
 }
 
-export fn createTextBuffer(widthMethod: u8) ?*text_buffer.UnifiedTextBuffer {
+pub export fn createTextBuffer(widthMethod: u8) ?*text_buffer.UnifiedTextBuffer {
     const pool = gp.initGlobalPool(globalArena);
     const wMethod: utf8.WidthMethod = if (widthMethod == 0) .wcwidth else .unicode;
 
@@ -587,89 +587,89 @@ export fn createTextBuffer(widthMethod: u8) ?*text_buffer.UnifiedTextBuffer {
     return tb;
 }
 
-export fn destroyTextBuffer(tb: *text_buffer.UnifiedTextBuffer) void {
+pub export fn destroyTextBuffer(tb: *text_buffer.UnifiedTextBuffer) void {
     tb.deinit();
 }
 
-export fn textBufferGetLength(tb: *text_buffer.UnifiedTextBuffer) u32 {
+pub export fn textBufferGetLength(tb: *text_buffer.UnifiedTextBuffer) u32 {
     return tb.getLength();
 }
 
-export fn textBufferGetByteSize(tb: *text_buffer.UnifiedTextBuffer) u32 {
+pub export fn textBufferGetByteSize(tb: *text_buffer.UnifiedTextBuffer) u32 {
     return tb.getByteSize();
 }
 
-export fn textBufferReset(tb: *text_buffer.UnifiedTextBuffer) void {
+pub export fn textBufferReset(tb: *text_buffer.UnifiedTextBuffer) void {
     tb.reset();
 }
 
-export fn textBufferClear(tb: *text_buffer.UnifiedTextBuffer) void {
+pub export fn textBufferClear(tb: *text_buffer.UnifiedTextBuffer) void {
     tb.clear();
 }
 
-export fn textBufferSetDefaultFg(tb: *text_buffer.UnifiedTextBuffer, fg: ?[*]const f32) void {
+pub export fn textBufferSetDefaultFg(tb: *text_buffer.UnifiedTextBuffer, fg: ?[*]const f32) void {
     const fgColor = if (fg) |fgPtr| utils.f32PtrToRGBA(fgPtr) else null;
     tb.setDefaultFg(fgColor);
 }
 
-export fn textBufferSetDefaultBg(tb: *text_buffer.UnifiedTextBuffer, bg: ?[*]const f32) void {
+pub export fn textBufferSetDefaultBg(tb: *text_buffer.UnifiedTextBuffer, bg: ?[*]const f32) void {
     const bgColor = if (bg) |bgPtr| utils.f32PtrToRGBA(bgPtr) else null;
     tb.setDefaultBg(bgColor);
 }
 
-export fn textBufferSetDefaultAttributes(tb: *text_buffer.UnifiedTextBuffer, attr: ?[*]const u32) void {
+pub export fn textBufferSetDefaultAttributes(tb: *text_buffer.UnifiedTextBuffer, attr: ?[*]const u32) void {
     const attributes = if (attr) |a| a[0] else null;
     tb.setDefaultAttributes(attributes);
 }
 
-export fn textBufferResetDefaults(tb: *text_buffer.UnifiedTextBuffer) void {
+pub export fn textBufferResetDefaults(tb: *text_buffer.UnifiedTextBuffer) void {
     tb.resetDefaults();
 }
 
-export fn textBufferGetTabWidth(tb: *text_buffer.UnifiedTextBuffer) u8 {
+pub export fn textBufferGetTabWidth(tb: *text_buffer.UnifiedTextBuffer) u8 {
     return tb.getTabWidth();
 }
 
-export fn textBufferSetTabWidth(tb: *text_buffer.UnifiedTextBuffer, width: u8) void {
+pub export fn textBufferSetTabWidth(tb: *text_buffer.UnifiedTextBuffer, width: u8) void {
     tb.setTabWidth(width);
 }
 
-export fn textBufferRegisterMemBuffer(tb: *text_buffer.UnifiedTextBuffer, dataPtr: [*]const u8, dataLen: usize, owned: bool) u16 {
+pub export fn textBufferRegisterMemBuffer(tb: *text_buffer.UnifiedTextBuffer, dataPtr: [*]const u8, dataLen: usize, owned: bool) u16 {
     const data = dataPtr[0..dataLen];
     const mem_id = tb.mem_registry.register(data, owned) catch return 0xFFFF;
     return @intCast(mem_id);
 }
 
-export fn textBufferReplaceMemBuffer(tb: *text_buffer.UnifiedTextBuffer, id: u8, dataPtr: [*]const u8, dataLen: usize, owned: bool) bool {
+pub export fn textBufferReplaceMemBuffer(tb: *text_buffer.UnifiedTextBuffer, id: u8, dataPtr: [*]const u8, dataLen: usize, owned: bool) bool {
     const data = dataPtr[0..dataLen];
     tb.mem_registry.replace(id, data, owned) catch return false;
     return true;
 }
 
-export fn textBufferClearMemRegistry(tb: *text_buffer.UnifiedTextBuffer) void {
+pub export fn textBufferClearMemRegistry(tb: *text_buffer.UnifiedTextBuffer) void {
     tb.mem_registry.clear();
 }
 
-export fn textBufferSetTextFromMem(tb: *text_buffer.UnifiedTextBuffer, id: u8) void {
+pub export fn textBufferSetTextFromMem(tb: *text_buffer.UnifiedTextBuffer, id: u8) void {
     tb.setTextFromMemId(id) catch {};
 }
 
-export fn textBufferAppend(tb: *text_buffer.UnifiedTextBuffer, dataPtr: [*]const u8, dataLen: usize) void {
+pub export fn textBufferAppend(tb: *text_buffer.UnifiedTextBuffer, dataPtr: [*]const u8, dataLen: usize) void {
     const data = dataPtr[0..dataLen];
     tb.append(data) catch {};
 }
 
-export fn textBufferAppendFromMemId(tb: *text_buffer.UnifiedTextBuffer, id: u8) void {
+pub export fn textBufferAppendFromMemId(tb: *text_buffer.UnifiedTextBuffer, id: u8) void {
     tb.appendFromMemId(id) catch {};
 }
 
-export fn textBufferLoadFile(tb: *text_buffer.UnifiedTextBuffer, pathPtr: [*]const u8, pathLen: usize) bool {
+pub export fn textBufferLoadFile(tb: *text_buffer.UnifiedTextBuffer, pathPtr: [*]const u8, pathLen: usize) bool {
     const path = pathPtr[0..pathLen];
     tb.loadFile(path) catch return false;
     return true;
 }
 
-export fn textBufferSetStyledText(
+pub export fn textBufferSetStyledText(
     tb: *text_buffer.UnifiedTextBuffer,
     chunksPtr: [*]const text_buffer.StyledChunk,
     chunkCount: usize,
@@ -679,68 +679,68 @@ export fn textBufferSetStyledText(
     tb.setStyledText(chunks) catch {};
 }
 
-export fn textBufferGetLineCount(tb: *text_buffer.UnifiedTextBuffer) u32 {
+pub export fn textBufferGetLineCount(tb: *text_buffer.UnifiedTextBuffer) u32 {
     return tb.getLineCount();
 }
 
-export fn textBufferGetPlainText(tb: *text_buffer.UnifiedTextBuffer, outPtr: [*]u8, maxLen: usize) usize {
+pub export fn textBufferGetPlainText(tb: *text_buffer.UnifiedTextBuffer, outPtr: [*]u8, maxLen: usize) usize {
     const outBuffer = outPtr[0..maxLen];
     return tb.getPlainTextIntoBuffer(outBuffer);
 }
 
 // TextBufferView functions (Array-based for backward compatibility)
-export fn createTextBufferView(tb: *text_buffer.UnifiedTextBuffer) ?*text_buffer_view.UnifiedTextBufferView {
+pub export fn createTextBufferView(tb: *text_buffer.UnifiedTextBuffer) ?*text_buffer_view.UnifiedTextBufferView {
     const view = text_buffer_view.UnifiedTextBufferView.init(globalAllocator, tb) catch {
         return null;
     };
     return view;
 }
 
-export fn destroyTextBufferView(view: *text_buffer_view.UnifiedTextBufferView) void {
+pub export fn destroyTextBufferView(view: *text_buffer_view.UnifiedTextBufferView) void {
     view.deinit();
 }
 
-export fn textBufferViewSetSelection(view: *text_buffer_view.UnifiedTextBufferView, start: u32, end: u32, bgColor: ?[*]const f32, fgColor: ?[*]const f32) void {
+pub export fn textBufferViewSetSelection(view: *text_buffer_view.UnifiedTextBufferView, start: u32, end: u32, bgColor: ?[*]const f32, fgColor: ?[*]const f32) void {
     const bg = if (bgColor) |bgPtr| utils.f32PtrToRGBA(bgPtr) else null;
     const fg = if (fgColor) |fgPtr| utils.f32PtrToRGBA(fgPtr) else null;
     view.setSelection(start, end, bg, fg);
 }
 
-export fn textBufferViewResetSelection(view: *text_buffer_view.UnifiedTextBufferView) void {
+pub export fn textBufferViewResetSelection(view: *text_buffer_view.UnifiedTextBufferView) void {
     view.resetSelection();
 }
 
-export fn textBufferViewGetSelectionInfo(view: *text_buffer_view.UnifiedTextBufferView) u64 {
+pub export fn textBufferViewGetSelectionInfo(view: *text_buffer_view.UnifiedTextBufferView) u64 {
     return view.packSelectionInfo();
 }
 
-export fn textBufferViewSetLocalSelection(view: *text_buffer_view.UnifiedTextBufferView, anchorX: i32, anchorY: i32, focusX: i32, focusY: i32, bgColor: ?[*]const f32, fgColor: ?[*]const f32) bool {
+pub export fn textBufferViewSetLocalSelection(view: *text_buffer_view.UnifiedTextBufferView, anchorX: i32, anchorY: i32, focusX: i32, focusY: i32, bgColor: ?[*]const f32, fgColor: ?[*]const f32) bool {
     const bg = if (bgColor) |bgPtr| utils.f32PtrToRGBA(bgPtr) else null;
     const fg = if (fgColor) |fgPtr| utils.f32PtrToRGBA(fgPtr) else null;
     return view.setLocalSelection(anchorX, anchorY, focusX, focusY, bg, fg);
 }
 
-export fn textBufferViewUpdateSelection(view: *text_buffer_view.UnifiedTextBufferView, end: u32, bgColor: ?[*]const f32, fgColor: ?[*]const f32) void {
+pub export fn textBufferViewUpdateSelection(view: *text_buffer_view.UnifiedTextBufferView, end: u32, bgColor: ?[*]const f32, fgColor: ?[*]const f32) void {
     const bg = if (bgColor) |bgPtr| utils.f32PtrToRGBA(bgPtr) else null;
     const fg = if (fgColor) |fgPtr| utils.f32PtrToRGBA(fgPtr) else null;
     view.updateSelection(end, bg, fg);
 }
 
-export fn textBufferViewUpdateLocalSelection(view: *text_buffer_view.UnifiedTextBufferView, anchorX: i32, anchorY: i32, focusX: i32, focusY: i32, bgColor: ?[*]const f32, fgColor: ?[*]const f32) bool {
+pub export fn textBufferViewUpdateLocalSelection(view: *text_buffer_view.UnifiedTextBufferView, anchorX: i32, anchorY: i32, focusX: i32, focusY: i32, bgColor: ?[*]const f32, fgColor: ?[*]const f32) bool {
     const bg = if (bgColor) |bgPtr| utils.f32PtrToRGBA(bgPtr) else null;
     const fg = if (fgColor) |fgPtr| utils.f32PtrToRGBA(fgPtr) else null;
     return view.updateLocalSelection(anchorX, anchorY, focusX, focusY, bg, fg);
 }
 
-export fn textBufferViewResetLocalSelection(view: *text_buffer_view.UnifiedTextBufferView) void {
+pub export fn textBufferViewResetLocalSelection(view: *text_buffer_view.UnifiedTextBufferView) void {
     view.resetLocalSelection();
 }
 
-export fn textBufferViewSetWrapWidth(view: *text_buffer_view.UnifiedTextBufferView, width: u32) void {
+pub export fn textBufferViewSetWrapWidth(view: *text_buffer_view.UnifiedTextBufferView, width: u32) void {
     view.setWrapWidth(if (width == 0) null else width);
 }
 
-export fn textBufferViewSetWrapMode(view: *text_buffer_view.UnifiedTextBufferView, mode: u8) void {
+pub export fn textBufferViewSetWrapMode(view: *text_buffer_view.UnifiedTextBufferView, mode: u8) void {
     const wrapMode: text_buffer.WrapMode = switch (mode) {
         0 => .none,
         1 => .char,
@@ -750,11 +750,11 @@ export fn textBufferViewSetWrapMode(view: *text_buffer_view.UnifiedTextBufferVie
     view.setWrapMode(wrapMode);
 }
 
-export fn textBufferViewSetViewportSize(view: *text_buffer_view.UnifiedTextBufferView, width: u32, height: u32) void {
+pub export fn textBufferViewSetViewportSize(view: *text_buffer_view.UnifiedTextBufferView, width: u32, height: u32) void {
     view.setViewportSize(width, height);
 }
 
-export fn textBufferViewSetViewport(view: *text_buffer_view.UnifiedTextBufferView, x: u32, y: u32, width: u32, height: u32) void {
+pub export fn textBufferViewSetViewport(view: *text_buffer_view.UnifiedTextBufferView, x: u32, y: u32, width: u32, height: u32) void {
     view.setViewport(text_buffer_view.Viewport{
         .x = x,
         .y = y,
@@ -763,11 +763,11 @@ export fn textBufferViewSetViewport(view: *text_buffer_view.UnifiedTextBufferVie
     });
 }
 
-export fn textBufferViewGetVirtualLineCount(view: *text_buffer_view.UnifiedTextBufferView) u32 {
+pub export fn textBufferViewGetVirtualLineCount(view: *text_buffer_view.UnifiedTextBufferView) u32 {
     return view.getVirtualLineCount();
 }
 
-export fn textBufferViewGetLineInfoDirect(view: *text_buffer_view.UnifiedTextBufferView, outPtr: *ExternalLineInfo) void {
+pub export fn textBufferViewGetLineInfoDirect(view: *text_buffer_view.UnifiedTextBufferView, outPtr: *ExternalLineInfo) void {
     const line_info = view.getCachedLineInfo();
 
     outPtr.* = .{
@@ -783,7 +783,7 @@ export fn textBufferViewGetLineInfoDirect(view: *text_buffer_view.UnifiedTextBuf
     };
 }
 
-export fn textBufferViewGetLogicalLineInfoDirect(view: *text_buffer_view.UnifiedTextBufferView, outPtr: *ExternalLineInfo) void {
+pub export fn textBufferViewGetLogicalLineInfoDirect(view: *text_buffer_view.UnifiedTextBufferView, outPtr: *ExternalLineInfo) void {
     const line_info = view.getLogicalLineInfo();
 
     outPtr.* = .{
@@ -799,25 +799,25 @@ export fn textBufferViewGetLogicalLineInfoDirect(view: *text_buffer_view.Unified
     };
 }
 
-export fn textBufferViewGetSelectedText(view: *text_buffer_view.UnifiedTextBufferView, outPtr: [*]u8, maxLen: usize) usize {
+pub export fn textBufferViewGetSelectedText(view: *text_buffer_view.UnifiedTextBufferView, outPtr: [*]u8, maxLen: usize) usize {
     const outBuffer = outPtr[0..maxLen];
     return view.getSelectedTextIntoBuffer(outBuffer);
 }
 
-export fn textBufferViewGetPlainText(view: *text_buffer_view.UnifiedTextBufferView, outPtr: [*]u8, maxLen: usize) usize {
+pub export fn textBufferViewGetPlainText(view: *text_buffer_view.UnifiedTextBufferView, outPtr: [*]u8, maxLen: usize) usize {
     const outBuffer = outPtr[0..maxLen];
     return view.getPlainTextIntoBuffer(outBuffer);
 }
 
-export fn textBufferViewSetTabIndicator(view: *text_buffer_view.UnifiedTextBufferView, indicator: u32) void {
+pub export fn textBufferViewSetTabIndicator(view: *text_buffer_view.UnifiedTextBufferView, indicator: u32) void {
     view.setTabIndicator(indicator);
 }
 
-export fn textBufferViewSetTabIndicatorColor(view: *text_buffer_view.UnifiedTextBufferView, color: [*]const f32) void {
+pub export fn textBufferViewSetTabIndicatorColor(view: *text_buffer_view.UnifiedTextBufferView, color: [*]const f32) void {
     view.setTabIndicatorColor(utils.f32PtrToRGBA(color));
 }
 
-export fn textBufferViewSetTruncate(view: *text_buffer_view.UnifiedTextBufferView, truncate: bool) void {
+pub export fn textBufferViewSetTruncate(view: *text_buffer_view.UnifiedTextBufferView, truncate: bool) void {
     view.setTruncate(truncate);
 }
 
@@ -826,7 +826,7 @@ pub const ExternalMeasureResult = extern struct {
     max_width: u32,
 };
 
-export fn textBufferViewMeasureForDimensions(view: *text_buffer_view.UnifiedTextBufferView, width: u32, height: u32, outPtr: *ExternalMeasureResult) bool {
+pub export fn textBufferViewMeasureForDimensions(view: *text_buffer_view.UnifiedTextBufferView, width: u32, height: u32, outPtr: *ExternalMeasureResult) bool {
     const result = view.measureForDimensions(width, height) catch return false;
     outPtr.* = .{
         .line_count = result.line_count,
@@ -837,7 +837,7 @@ export fn textBufferViewMeasureForDimensions(view: *text_buffer_view.UnifiedText
 
 // ===== EditBuffer Exports =====
 
-export fn createEditBuffer(widthMethod: u8) ?*edit_buffer_mod.EditBuffer {
+pub export fn createEditBuffer(widthMethod: u8) ?*edit_buffer_mod.EditBuffer {
     const pool = gp.initGlobalPool(globalArena);
     const wMethod: utf8.WidthMethod = if (widthMethod == 0) .wcwidth else .unicode;
 
@@ -848,68 +848,68 @@ export fn createEditBuffer(widthMethod: u8) ?*edit_buffer_mod.EditBuffer {
     ) catch null;
 }
 
-export fn destroyEditBuffer(edit_buffer: *edit_buffer_mod.EditBuffer) void {
+pub export fn destroyEditBuffer(edit_buffer: *edit_buffer_mod.EditBuffer) void {
     edit_buffer.deinit();
 }
 
-export fn editBufferGetTextBuffer(edit_buffer: *edit_buffer_mod.EditBuffer) *text_buffer.UnifiedTextBuffer {
+pub export fn editBufferGetTextBuffer(edit_buffer: *edit_buffer_mod.EditBuffer) *text_buffer.UnifiedTextBuffer {
     return edit_buffer.getTextBuffer();
 }
 
-export fn editBufferInsertText(edit_buffer: *edit_buffer_mod.EditBuffer, textPtr: [*]const u8, textLen: usize) void {
+pub export fn editBufferInsertText(edit_buffer: *edit_buffer_mod.EditBuffer, textPtr: [*]const u8, textLen: usize) void {
     const text = textPtr[0..textLen];
     edit_buffer.insertText(text) catch {};
 }
 
-export fn editBufferDeleteRange(edit_buffer: *edit_buffer_mod.EditBuffer, start_row: u32, start_col: u32, end_row: u32, end_col: u32) void {
+pub export fn editBufferDeleteRange(edit_buffer: *edit_buffer_mod.EditBuffer, start_row: u32, start_col: u32, end_row: u32, end_col: u32) void {
     const start = edit_buffer_mod.Cursor{ .row = start_row, .col = start_col };
     const end = edit_buffer_mod.Cursor{ .row = end_row, .col = end_col };
     edit_buffer.deleteRange(start, end) catch {};
 }
 
-export fn editBufferDeleteCharBackward(edit_buffer: *edit_buffer_mod.EditBuffer) void {
+pub export fn editBufferDeleteCharBackward(edit_buffer: *edit_buffer_mod.EditBuffer) void {
     edit_buffer.backspace() catch {};
 }
 
-export fn editBufferDeleteChar(edit_buffer: *edit_buffer_mod.EditBuffer) void {
+pub export fn editBufferDeleteChar(edit_buffer: *edit_buffer_mod.EditBuffer) void {
     edit_buffer.deleteForward() catch {};
 }
 
-export fn editBufferMoveCursorLeft(edit_buffer: *edit_buffer_mod.EditBuffer) void {
+pub export fn editBufferMoveCursorLeft(edit_buffer: *edit_buffer_mod.EditBuffer) void {
     edit_buffer.moveLeft();
 }
 
-export fn editBufferMoveCursorRight(edit_buffer: *edit_buffer_mod.EditBuffer) void {
+pub export fn editBufferMoveCursorRight(edit_buffer: *edit_buffer_mod.EditBuffer) void {
     edit_buffer.moveRight();
 }
 
-export fn editBufferMoveCursorUp(edit_buffer: *edit_buffer_mod.EditBuffer) void {
+pub export fn editBufferMoveCursorUp(edit_buffer: *edit_buffer_mod.EditBuffer) void {
     edit_buffer.moveUp();
 }
 
-export fn editBufferMoveCursorDown(edit_buffer: *edit_buffer_mod.EditBuffer) void {
+pub export fn editBufferMoveCursorDown(edit_buffer: *edit_buffer_mod.EditBuffer) void {
     edit_buffer.moveDown();
 }
 
-export fn editBufferGetCursor(edit_buffer: *edit_buffer_mod.EditBuffer, outRow: *u32, outCol: *u32) void {
+pub export fn editBufferGetCursor(edit_buffer: *edit_buffer_mod.EditBuffer, outRow: *u32, outCol: *u32) void {
     const cursor = edit_buffer.getPrimaryCursor();
     outRow.* = cursor.row;
     outCol.* = cursor.col;
 }
 
-export fn editBufferSetCursor(edit_buffer: *edit_buffer_mod.EditBuffer, row: u32, col: u32) void {
+pub export fn editBufferSetCursor(edit_buffer: *edit_buffer_mod.EditBuffer, row: u32, col: u32) void {
     edit_buffer.setCursor(row, col) catch {};
 }
 
-export fn editBufferSetCursorToLineCol(edit_buffer: *edit_buffer_mod.EditBuffer, row: u32, col: u32) void {
+pub export fn editBufferSetCursorToLineCol(edit_buffer: *edit_buffer_mod.EditBuffer, row: u32, col: u32) void {
     edit_buffer.setCursor(row, col) catch {};
 }
 
-export fn editBufferSetCursorByOffset(edit_buffer: *edit_buffer_mod.EditBuffer, offset: u32) void {
+pub export fn editBufferSetCursorByOffset(edit_buffer: *edit_buffer_mod.EditBuffer, offset: u32) void {
     edit_buffer.setCursorByOffset(offset) catch {};
 }
 
-export fn editBufferGetNextWordBoundary(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: *ExternalLogicalCursor) void {
+pub export fn editBufferGetNextWordBoundary(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: *ExternalLogicalCursor) void {
     const cursor = edit_buffer.getNextWordBoundary();
     outPtr.* = .{
         .row = cursor.row,
@@ -918,7 +918,7 @@ export fn editBufferGetNextWordBoundary(edit_buffer: *edit_buffer_mod.EditBuffer
     };
 }
 
-export fn editBufferGetPrevWordBoundary(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: *ExternalLogicalCursor) void {
+pub export fn editBufferGetPrevWordBoundary(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: *ExternalLogicalCursor) void {
     const cursor = edit_buffer.getPrevWordBoundary();
     outPtr.* = .{
         .row = cursor.row,
@@ -927,7 +927,7 @@ export fn editBufferGetPrevWordBoundary(edit_buffer: *edit_buffer_mod.EditBuffer
     };
 }
 
-export fn editBufferGetEOL(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: *ExternalLogicalCursor) void {
+pub export fn editBufferGetEOL(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: *ExternalLogicalCursor) void {
     const cursor = edit_buffer.getEOL();
     outPtr.* = .{
         .row = cursor.row,
@@ -936,7 +936,7 @@ export fn editBufferGetEOL(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: *Ex
     };
 }
 
-export fn editBufferOffsetToPosition(edit_buffer: *edit_buffer_mod.EditBuffer, offset: u32, outPtr: *ExternalLogicalCursor) bool {
+pub export fn editBufferOffsetToPosition(edit_buffer: *edit_buffer_mod.EditBuffer, offset: u32, outPtr: *ExternalLogicalCursor) bool {
     const iter_mod = @import("text-buffer-iterators.zig");
     const coords = iter_mod.offsetToCoords(&edit_buffer.tb.rope, offset) orelse return false;
     outPtr.* = .{
@@ -947,67 +947,67 @@ export fn editBufferOffsetToPosition(edit_buffer: *edit_buffer_mod.EditBuffer, o
     return true;
 }
 
-export fn editBufferPositionToOffset(edit_buffer: *edit_buffer_mod.EditBuffer, row: u32, col: u32) u32 {
+pub export fn editBufferPositionToOffset(edit_buffer: *edit_buffer_mod.EditBuffer, row: u32, col: u32) u32 {
     const iter_mod = @import("text-buffer-iterators.zig");
     return iter_mod.coordsToOffset(&edit_buffer.tb.rope, row, col) orelse 0;
 }
 
-export fn editBufferGetLineStartOffset(edit_buffer: *edit_buffer_mod.EditBuffer, row: u32) u32 {
+pub export fn editBufferGetLineStartOffset(edit_buffer: *edit_buffer_mod.EditBuffer, row: u32) u32 {
     const iter_mod = @import("text-buffer-iterators.zig");
     return iter_mod.coordsToOffset(&edit_buffer.tb.rope, row, 0) orelse 0;
 }
 
-export fn editBufferGetTextRange(edit_buffer: *edit_buffer_mod.EditBuffer, start_offset: u32, end_offset: u32, outPtr: [*]u8, maxLen: usize) usize {
+pub export fn editBufferGetTextRange(edit_buffer: *edit_buffer_mod.EditBuffer, start_offset: u32, end_offset: u32, outPtr: [*]u8, maxLen: usize) usize {
     const outBuffer = outPtr[0..maxLen];
     return edit_buffer.getTextRange(start_offset, end_offset, outBuffer) catch 0;
 }
 
-export fn editBufferGetTextRangeByCoords(edit_buffer: *edit_buffer_mod.EditBuffer, start_row: u32, start_col: u32, end_row: u32, end_col: u32, outPtr: [*]u8, maxLen: usize) usize {
+pub export fn editBufferGetTextRangeByCoords(edit_buffer: *edit_buffer_mod.EditBuffer, start_row: u32, start_col: u32, end_row: u32, end_col: u32, outPtr: [*]u8, maxLen: usize) usize {
     const outBuffer = outPtr[0..maxLen];
     return edit_buffer.getTextRangeByCoords(start_row, start_col, end_row, end_col, outBuffer);
 }
 
-export fn editBufferSetText(edit_buffer: *edit_buffer_mod.EditBuffer, textPtr: [*]const u8, textLen: usize) void {
+pub export fn editBufferSetText(edit_buffer: *edit_buffer_mod.EditBuffer, textPtr: [*]const u8, textLen: usize) void {
     const text = textPtr[0..textLen];
     edit_buffer.setText(text) catch {};
 }
 
-export fn editBufferSetTextFromMem(edit_buffer: *edit_buffer_mod.EditBuffer, mem_id: u8) void {
+pub export fn editBufferSetTextFromMem(edit_buffer: *edit_buffer_mod.EditBuffer, mem_id: u8) void {
     edit_buffer.setTextFromMemId(mem_id) catch {};
 }
 
-export fn editBufferReplaceText(edit_buffer: *edit_buffer_mod.EditBuffer, textPtr: [*]const u8, textLen: usize) void {
+pub export fn editBufferReplaceText(edit_buffer: *edit_buffer_mod.EditBuffer, textPtr: [*]const u8, textLen: usize) void {
     const text = textPtr[0..textLen];
     edit_buffer.replaceText(text) catch {};
 }
 
-export fn editBufferReplaceTextFromMem(edit_buffer: *edit_buffer_mod.EditBuffer, mem_id: u8) void {
+pub export fn editBufferReplaceTextFromMem(edit_buffer: *edit_buffer_mod.EditBuffer, mem_id: u8) void {
     edit_buffer.replaceTextFromMemId(mem_id) catch {};
 }
 
-export fn editBufferGetText(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: [*]u8, maxLen: usize) usize {
+pub export fn editBufferGetText(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: [*]u8, maxLen: usize) usize {
     const outBuffer = outPtr[0..maxLen];
     return edit_buffer.getText(outBuffer);
 }
 
-export fn editBufferInsertChar(edit_buffer: *edit_buffer_mod.EditBuffer, charPtr: [*]const u8, charLen: usize) void {
+pub export fn editBufferInsertChar(edit_buffer: *edit_buffer_mod.EditBuffer, charPtr: [*]const u8, charLen: usize) void {
     const text = charPtr[0..charLen];
     edit_buffer.insertText(text) catch {};
 }
 
-export fn editBufferNewLine(edit_buffer: *edit_buffer_mod.EditBuffer) void {
+pub export fn editBufferNewLine(edit_buffer: *edit_buffer_mod.EditBuffer) void {
     edit_buffer.insertText("\n") catch {};
 }
 
-export fn editBufferDeleteLine(edit_buffer: *edit_buffer_mod.EditBuffer) void {
+pub export fn editBufferDeleteLine(edit_buffer: *edit_buffer_mod.EditBuffer) void {
     edit_buffer.deleteLine() catch {};
 }
 
-export fn editBufferGotoLine(edit_buffer: *edit_buffer_mod.EditBuffer, line: u32) void {
+pub export fn editBufferGotoLine(edit_buffer: *edit_buffer_mod.EditBuffer, line: u32) void {
     edit_buffer.gotoLine(line) catch {};
 }
 
-export fn editBufferGetCursorPosition(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: *ExternalLogicalCursor) void {
+pub export fn editBufferGetCursorPosition(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: *ExternalLogicalCursor) void {
     const pos = edit_buffer.getCursorPosition();
     outPtr.* = .{
         .row = pos.line,
@@ -1016,63 +1016,63 @@ export fn editBufferGetCursorPosition(edit_buffer: *edit_buffer_mod.EditBuffer, 
     };
 }
 
-export fn editBufferGetId(edit_buffer: *edit_buffer_mod.EditBuffer) u16 {
+pub export fn editBufferGetId(edit_buffer: *edit_buffer_mod.EditBuffer) u16 {
     return edit_buffer.getId();
 }
 
-export fn editBufferDebugLogRope(edit_buffer: *edit_buffer_mod.EditBuffer) void {
+pub export fn editBufferDebugLogRope(edit_buffer: *edit_buffer_mod.EditBuffer) void {
     edit_buffer.debugLogRope();
 }
 
-export fn editBufferUndo(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: [*]u8, maxLen: usize) usize {
+pub export fn editBufferUndo(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: [*]u8, maxLen: usize) usize {
     const prev_meta = edit_buffer.undo() catch return 0;
     const copyLen = @min(prev_meta.len, maxLen);
     @memcpy(outPtr[0..copyLen], prev_meta[0..copyLen]);
     return copyLen;
 }
 
-export fn editBufferRedo(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: [*]u8, maxLen: usize) usize {
+pub export fn editBufferRedo(edit_buffer: *edit_buffer_mod.EditBuffer, outPtr: [*]u8, maxLen: usize) usize {
     const next_meta = edit_buffer.redo() catch return 0;
     const copyLen = @min(next_meta.len, maxLen);
     @memcpy(outPtr[0..copyLen], next_meta[0..copyLen]);
     return copyLen;
 }
 
-export fn editBufferCanUndo(edit_buffer: *edit_buffer_mod.EditBuffer) bool {
+pub export fn editBufferCanUndo(edit_buffer: *edit_buffer_mod.EditBuffer) bool {
     return edit_buffer.canUndo();
 }
 
-export fn editBufferCanRedo(edit_buffer: *edit_buffer_mod.EditBuffer) bool {
+pub export fn editBufferCanRedo(edit_buffer: *edit_buffer_mod.EditBuffer) bool {
     return edit_buffer.canRedo();
 }
 
-export fn editBufferClearHistory(edit_buffer: *edit_buffer_mod.EditBuffer) void {
+pub export fn editBufferClearHistory(edit_buffer: *edit_buffer_mod.EditBuffer) void {
     edit_buffer.clearHistory();
 }
 
-export fn editBufferClear(edit_buffer: *edit_buffer_mod.EditBuffer) void {
+pub export fn editBufferClear(edit_buffer: *edit_buffer_mod.EditBuffer) void {
     edit_buffer.clear() catch {};
 }
 
 // ===== EditorView Exports =====
 
-export fn createEditorView(edit_buffer: *edit_buffer_mod.EditBuffer, viewport_width: u32, viewport_height: u32) ?*editor_view.EditorView {
+pub export fn createEditorView(edit_buffer: *edit_buffer_mod.EditBuffer, viewport_width: u32, viewport_height: u32) ?*editor_view.EditorView {
     return editor_view.EditorView.init(globalArena, edit_buffer, viewport_width, viewport_height) catch null;
 }
 
-export fn destroyEditorView(view: *editor_view.EditorView) void {
+pub export fn destroyEditorView(view: *editor_view.EditorView) void {
     view.deinit();
 }
 
-export fn editorViewSetViewport(view: *editor_view.EditorView, x: u32, y: u32, width: u32, height: u32, moveCursor: bool) void {
+pub export fn editorViewSetViewport(view: *editor_view.EditorView, x: u32, y: u32, width: u32, height: u32, moveCursor: bool) void {
     view.setViewport(text_buffer_view.Viewport{ .x = x, .y = y, .width = width, .height = height }, moveCursor);
 }
 
-export fn editorViewClearViewport(view: *editor_view.EditorView) void {
+pub export fn editorViewClearViewport(view: *editor_view.EditorView) void {
     view.setViewport(null, false);
 }
 
-export fn editorViewGetViewport(view: *editor_view.EditorView, outX: *u32, outY: *u32, outWidth: *u32, outHeight: *u32) bool {
+pub export fn editorViewGetViewport(view: *editor_view.EditorView, outX: *u32, outY: *u32, outWidth: *u32, outHeight: *u32) bool {
     if (view.getViewport()) |vp| {
         outX.* = vp.x;
         outY.* = vp.y;
@@ -1083,20 +1083,20 @@ export fn editorViewGetViewport(view: *editor_view.EditorView, outX: *u32, outY:
     return false;
 }
 
-export fn editorViewSetScrollMargin(view: *editor_view.EditorView, margin: f32) void {
+pub export fn editorViewSetScrollMargin(view: *editor_view.EditorView, margin: f32) void {
     view.setScrollMargin(margin);
 }
 
-export fn editorViewGetVirtualLineCount(view: *editor_view.EditorView) u32 {
+pub export fn editorViewGetVirtualLineCount(view: *editor_view.EditorView) u32 {
     // TODO: There is a getter for that directly, no?
     return @intCast(view.getVirtualLines().len);
 }
 
-export fn editorViewGetTotalVirtualLineCount(view: *editor_view.EditorView) u32 {
+pub export fn editorViewGetTotalVirtualLineCount(view: *editor_view.EditorView) u32 {
     return view.getTotalVirtualLineCount();
 }
 
-export fn editorViewGetLineInfoDirect(view: *editor_view.EditorView, outPtr: *ExternalLineInfo) void {
+pub export fn editorViewGetLineInfoDirect(view: *editor_view.EditorView, outPtr: *ExternalLineInfo) void {
     const line_info = view.getCachedLineInfo();
     outPtr.* = .{
         .starts_ptr = line_info.starts.ptr,
@@ -1111,11 +1111,11 @@ export fn editorViewGetLineInfoDirect(view: *editor_view.EditorView, outPtr: *Ex
     };
 }
 
-export fn editorViewGetTextBufferView(view: *editor_view.EditorView) *text_buffer_view.UnifiedTextBufferView {
+pub export fn editorViewGetTextBufferView(view: *editor_view.EditorView) *text_buffer_view.UnifiedTextBufferView {
     return view.getTextBufferView();
 }
 
-export fn editorViewGetLogicalLineInfoDirect(view: *editor_view.EditorView, outPtr: *ExternalLineInfo) void {
+pub export fn editorViewGetLogicalLineInfoDirect(view: *editor_view.EditorView, outPtr: *ExternalLineInfo) void {
     const line_info = view.getLogicalLineInfo();
     outPtr.* = .{
         .starts_ptr = line_info.starts.ptr,
@@ -1130,11 +1130,11 @@ export fn editorViewGetLogicalLineInfoDirect(view: *editor_view.EditorView, outP
     };
 }
 
-export fn editorViewSetViewportSize(view: *editor_view.EditorView, width: u32, height: u32) void {
+pub export fn editorViewSetViewportSize(view: *editor_view.EditorView, width: u32, height: u32) void {
     view.setViewportSize(width, height);
 }
 
-export fn editorViewSetWrapMode(view: *editor_view.EditorView, mode: u8) void {
+pub export fn editorViewSetWrapMode(view: *editor_view.EditorView, mode: u8) void {
     const wrapMode: text_buffer.WrapMode = switch (mode) {
         0 => .none,
         1 => .char,
@@ -1145,65 +1145,65 @@ export fn editorViewSetWrapMode(view: *editor_view.EditorView, mode: u8) void {
 }
 
 // EditorView selection methods - delegate to TextBufferView
-export fn editorViewSetSelection(view: *editor_view.EditorView, start: u32, end: u32, bgColor: ?[*]const f32, fgColor: ?[*]const f32) void {
+pub export fn editorViewSetSelection(view: *editor_view.EditorView, start: u32, end: u32, bgColor: ?[*]const f32, fgColor: ?[*]const f32) void {
     const bg = if (bgColor) |bgPtr| utils.f32PtrToRGBA(bgPtr) else null;
     const fg = if (fgColor) |fgPtr| utils.f32PtrToRGBA(fgPtr) else null;
     view.text_buffer_view.setSelection(start, end, bg, fg);
 }
 
-export fn editorViewResetSelection(view: *editor_view.EditorView) void {
+pub export fn editorViewResetSelection(view: *editor_view.EditorView) void {
     view.text_buffer_view.resetSelection();
 }
 
-export fn editorViewGetSelection(view: *editor_view.EditorView) u64 {
+pub export fn editorViewGetSelection(view: *editor_view.EditorView) u64 {
     return view.text_buffer_view.packSelectionInfo();
 }
 
-export fn editorViewSetLocalSelection(view: *editor_view.EditorView, anchorX: i32, anchorY: i32, focusX: i32, focusY: i32, bgColor: ?[*]const f32, fgColor: ?[*]const f32, updateCursor: bool, followCursor: bool) bool {
+pub export fn editorViewSetLocalSelection(view: *editor_view.EditorView, anchorX: i32, anchorY: i32, focusX: i32, focusY: i32, bgColor: ?[*]const f32, fgColor: ?[*]const f32, updateCursor: bool, followCursor: bool) bool {
     const bg = if (bgColor) |bgPtr| utils.f32PtrToRGBA(bgPtr) else null;
     const fg = if (fgColor) |fgPtr| utils.f32PtrToRGBA(fgPtr) else null;
     view.setSelectionFollowCursor(followCursor);
     return view.setLocalSelection(anchorX, anchorY, focusX, focusY, bg, fg, updateCursor);
 }
 
-export fn editorViewUpdateSelection(view: *editor_view.EditorView, end: u32, bgColor: ?[*]const f32, fgColor: ?[*]const f32) void {
+pub export fn editorViewUpdateSelection(view: *editor_view.EditorView, end: u32, bgColor: ?[*]const f32, fgColor: ?[*]const f32) void {
     const bg = if (bgColor) |bgPtr| utils.f32PtrToRGBA(bgPtr) else null;
     const fg = if (fgColor) |fgPtr| utils.f32PtrToRGBA(fgPtr) else null;
     view.updateSelection(end, bg, fg);
 }
 
-export fn editorViewUpdateLocalSelection(view: *editor_view.EditorView, anchorX: i32, anchorY: i32, focusX: i32, focusY: i32, bgColor: ?[*]const f32, fgColor: ?[*]const f32, updateCursor: bool, followCursor: bool) bool {
+pub export fn editorViewUpdateLocalSelection(view: *editor_view.EditorView, anchorX: i32, anchorY: i32, focusX: i32, focusY: i32, bgColor: ?[*]const f32, fgColor: ?[*]const f32, updateCursor: bool, followCursor: bool) bool {
     const bg = if (bgColor) |bgPtr| utils.f32PtrToRGBA(bgPtr) else null;
     const fg = if (fgColor) |fgPtr| utils.f32PtrToRGBA(fgPtr) else null;
     view.setSelectionFollowCursor(followCursor);
     return view.updateLocalSelection(anchorX, anchorY, focusX, focusY, bg, fg, updateCursor);
 }
 
-export fn editorViewResetLocalSelection(view: *editor_view.EditorView) void {
+pub export fn editorViewResetLocalSelection(view: *editor_view.EditorView) void {
     view.setSelectionFollowCursor(false);
     view.text_buffer_view.resetLocalSelection();
 }
 
-export fn editorViewGetSelectedTextBytes(view: *editor_view.EditorView, outPtr: [*]u8, maxLen: usize) usize {
+pub export fn editorViewGetSelectedTextBytes(view: *editor_view.EditorView, outPtr: [*]u8, maxLen: usize) usize {
     const outBuffer = outPtr[0..maxLen];
     return view.text_buffer_view.getSelectedTextIntoBuffer(outBuffer);
 }
 
 // EditorView cursor and text methods
-export fn editorViewGetCursor(view: *editor_view.EditorView, outRow: *u32, outCol: *u32) void {
+pub export fn editorViewGetCursor(view: *editor_view.EditorView, outRow: *u32, outCol: *u32) void {
     const cursor = view.getPrimaryCursor();
     outRow.* = cursor.row;
     outCol.* = cursor.col;
 }
 
-export fn editorViewGetText(view: *editor_view.EditorView, outPtr: [*]u8, maxLen: usize) usize {
+pub export fn editorViewGetText(view: *editor_view.EditorView, outPtr: [*]u8, maxLen: usize) usize {
     const outBuffer = outPtr[0..maxLen];
     return view.getText(outBuffer);
 }
 
 // ===== EditorView VisualCursor Exports =====
 
-export fn editorViewGetVisualCursor(view: *editor_view.EditorView, outPtr: *ExternalVisualCursor) void {
+pub export fn editorViewGetVisualCursor(view: *editor_view.EditorView, outPtr: *ExternalVisualCursor) void {
     const vcursor = view.getVisualCursor();
     outPtr.* = .{
         .visual_row = vcursor.visual_row,
@@ -1214,23 +1214,23 @@ export fn editorViewGetVisualCursor(view: *editor_view.EditorView, outPtr: *Exte
     };
 }
 
-export fn editorViewMoveUpVisual(view: *editor_view.EditorView) void {
+pub export fn editorViewMoveUpVisual(view: *editor_view.EditorView) void {
     view.moveUpVisual();
 }
 
-export fn editorViewMoveDownVisual(view: *editor_view.EditorView) void {
+pub export fn editorViewMoveDownVisual(view: *editor_view.EditorView) void {
     view.moveDownVisual();
 }
 
-export fn editorViewDeleteSelectedText(view: *editor_view.EditorView) void {
+pub export fn editorViewDeleteSelectedText(view: *editor_view.EditorView) void {
     view.deleteSelectedText() catch {};
 }
 
-export fn editorViewSetCursorByOffset(view: *editor_view.EditorView, offset: u32) void {
+pub export fn editorViewSetCursorByOffset(view: *editor_view.EditorView, offset: u32) void {
     view.setCursorByOffset(offset) catch {};
 }
 
-export fn editorViewGetNextWordBoundary(view: *editor_view.EditorView, outPtr: *ExternalVisualCursor) void {
+pub export fn editorViewGetNextWordBoundary(view: *editor_view.EditorView, outPtr: *ExternalVisualCursor) void {
     const vcursor = view.getNextWordBoundary();
     outPtr.* = .{
         .visual_row = vcursor.visual_row,
@@ -1241,7 +1241,7 @@ export fn editorViewGetNextWordBoundary(view: *editor_view.EditorView, outPtr: *
     };
 }
 
-export fn editorViewGetPrevWordBoundary(view: *editor_view.EditorView, outPtr: *ExternalVisualCursor) void {
+pub export fn editorViewGetPrevWordBoundary(view: *editor_view.EditorView, outPtr: *ExternalVisualCursor) void {
     const vcursor = view.getPrevWordBoundary();
     outPtr.* = .{
         .visual_row = vcursor.visual_row,
@@ -1252,7 +1252,7 @@ export fn editorViewGetPrevWordBoundary(view: *editor_view.EditorView, outPtr: *
     };
 }
 
-export fn editorViewGetEOL(view: *editor_view.EditorView, outPtr: *ExternalVisualCursor) void {
+pub export fn editorViewGetEOL(view: *editor_view.EditorView, outPtr: *ExternalVisualCursor) void {
     const vcursor = view.getEOL();
     outPtr.* = .{
         .visual_row = vcursor.visual_row,
@@ -1263,7 +1263,7 @@ export fn editorViewGetEOL(view: *editor_view.EditorView, outPtr: *ExternalVisua
     };
 }
 
-export fn editorViewGetVisualSOL(view: *editor_view.EditorView, outPtr: *ExternalVisualCursor) void {
+pub export fn editorViewGetVisualSOL(view: *editor_view.EditorView, outPtr: *ExternalVisualCursor) void {
     const vcursor = view.getVisualSOL();
     outPtr.* = .{
         .visual_row = vcursor.visual_row,
@@ -1274,7 +1274,7 @@ export fn editorViewGetVisualSOL(view: *editor_view.EditorView, outPtr: *Externa
     };
 }
 
-export fn editorViewGetVisualEOL(view: *editor_view.EditorView, outPtr: *ExternalVisualCursor) void {
+pub export fn editorViewGetVisualEOL(view: *editor_view.EditorView, outPtr: *ExternalVisualCursor) void {
     const vcursor = view.getVisualEOL();
     outPtr.* = .{
         .visual_row = vcursor.visual_row,
@@ -1285,7 +1285,7 @@ export fn editorViewGetVisualEOL(view: *editor_view.EditorView, outPtr: *Externa
     };
 }
 
-export fn editorViewSetPlaceholderStyledText(
+pub export fn editorViewSetPlaceholderStyledText(
     view: *editor_view.EditorView,
     chunksPtr: [*]const text_buffer.StyledChunk,
     chunkCount: usize,
@@ -1298,15 +1298,15 @@ export fn editorViewSetPlaceholderStyledText(
     view.setPlaceholderStyledText(chunks) catch {};
 }
 
-export fn editorViewSetTabIndicator(view: *editor_view.EditorView, indicator: u32) void {
+pub export fn editorViewSetTabIndicator(view: *editor_view.EditorView, indicator: u32) void {
     view.setTabIndicator(indicator);
 }
 
-export fn editorViewSetTabIndicatorColor(view: *editor_view.EditorView, color: [*]const f32) void {
+pub export fn editorViewSetTabIndicatorColor(view: *editor_view.EditorView, color: [*]const f32) void {
     view.setTabIndicatorColor(utils.f32PtrToRGBA(color));
 }
 
-export fn bufferDrawEditorView(
+pub export fn bufferDrawEditorView(
     bufferPtr: *buffer.OptimizedBuffer,
     viewPtr: *editor_view.EditorView,
     x: i32,
@@ -1315,7 +1315,7 @@ export fn bufferDrawEditorView(
     bufferPtr.drawEditorView(viewPtr, x, y) catch {};
 }
 
-export fn bufferDrawTextBufferView(
+pub export fn bufferDrawTextBufferView(
     bufferPtr: *buffer.OptimizedBuffer,
     viewPtr: *text_buffer_view.UnifiedTextBufferView,
     x: i32,
@@ -1358,7 +1358,7 @@ pub const ExternalLineInfo = extern struct {
     max_width: u32,
 };
 
-export fn textBufferAddHighlightByCharRange(
+pub export fn textBufferAddHighlightByCharRange(
     tb: *text_buffer.UnifiedTextBuffer,
     hl_ptr: [*]const ExternalHighlight,
 ) void {
@@ -1367,7 +1367,7 @@ export fn textBufferAddHighlightByCharRange(
     tb.addHighlightByCharRange(hl.start, hl.end, hl.style_id, hl.priority, hl.hl_ref) catch {};
 }
 
-export fn textBufferAddHighlight(
+pub export fn textBufferAddHighlight(
     tb: *text_buffer.UnifiedTextBuffer,
     line_idx: u32,
     hl_ptr: [*]const ExternalHighlight,
@@ -1377,23 +1377,23 @@ export fn textBufferAddHighlight(
     tb.addHighlight(line_idx, hl.start, hl.end, hl.style_id, hl.priority, hl.hl_ref) catch {};
 }
 
-export fn textBufferRemoveHighlightsByRef(tb: *text_buffer.UnifiedTextBuffer, hl_ref: u16) void {
+pub export fn textBufferRemoveHighlightsByRef(tb: *text_buffer.UnifiedTextBuffer, hl_ref: u16) void {
     tb.removeHighlightsByRef(hl_ref);
 }
 
-export fn textBufferClearLineHighlights(tb: *text_buffer.UnifiedTextBuffer, line_idx: u32) void {
+pub export fn textBufferClearLineHighlights(tb: *text_buffer.UnifiedTextBuffer, line_idx: u32) void {
     tb.clearLineHighlights(line_idx);
 }
 
-export fn textBufferClearAllHighlights(tb: *text_buffer.UnifiedTextBuffer) void {
+pub export fn textBufferClearAllHighlights(tb: *text_buffer.UnifiedTextBuffer) void {
     tb.clearAllHighlights();
 }
 
-export fn textBufferSetSyntaxStyle(tb: *text_buffer.UnifiedTextBuffer, style: ?*syntax_style.SyntaxStyle) void {
+pub export fn textBufferSetSyntaxStyle(tb: *text_buffer.UnifiedTextBuffer, style: ?*syntax_style.SyntaxStyle) void {
     tb.setSyntaxStyle(style);
 }
 
-export fn textBufferGetLineHighlightsPtr(
+pub export fn textBufferGetLineHighlightsPtr(
     tb: *text_buffer.UnifiedTextBuffer,
     line_idx: u32,
     out_count: *usize,
@@ -1421,49 +1421,49 @@ export fn textBufferGetLineHighlightsPtr(
     return slice.ptr;
 }
 
-export fn textBufferFreeLineHighlights(ptr: [*]const ExternalHighlight, count: usize) void {
+pub export fn textBufferFreeLineHighlights(ptr: [*]const ExternalHighlight, count: usize) void {
     globalAllocator.free(@constCast(ptr)[0..count]);
 }
 
-export fn textBufferGetHighlightCount(tb: *text_buffer.UnifiedTextBuffer) u32 {
+pub export fn textBufferGetHighlightCount(tb: *text_buffer.UnifiedTextBuffer) u32 {
     return tb.getHighlightCount();
 }
 
-export fn textBufferGetTextRange(tb: *text_buffer.UnifiedTextBuffer, start_offset: u32, end_offset: u32, outPtr: [*]u8, maxLen: usize) usize {
+pub export fn textBufferGetTextRange(tb: *text_buffer.UnifiedTextBuffer, start_offset: u32, end_offset: u32, outPtr: [*]u8, maxLen: usize) usize {
     const outBuffer = outPtr[0..maxLen];
     return tb.getTextRange(start_offset, end_offset, outBuffer);
 }
 
-export fn textBufferGetTextRangeByCoords(tb: *text_buffer.UnifiedTextBuffer, start_row: u32, start_col: u32, end_row: u32, end_col: u32, outPtr: [*]u8, maxLen: usize) usize {
+pub export fn textBufferGetTextRangeByCoords(tb: *text_buffer.UnifiedTextBuffer, start_row: u32, start_col: u32, end_row: u32, end_col: u32, outPtr: [*]u8, maxLen: usize) usize {
     const outBuffer = outPtr[0..maxLen];
     return tb.getTextRangeByCoords(start_row, start_col, end_row, end_col, outBuffer);
 }
 
 // SyntaxStyle functions
-export fn createSyntaxStyle() ?*syntax_style.SyntaxStyle {
+pub export fn createSyntaxStyle() ?*syntax_style.SyntaxStyle {
     return syntax_style.SyntaxStyle.init(globalAllocator) catch |err| {
         logger.err("Failed to create SyntaxStyle: {}", .{err});
         return null;
     };
 }
 
-export fn destroySyntaxStyle(style: *syntax_style.SyntaxStyle) void {
+pub export fn destroySyntaxStyle(style: *syntax_style.SyntaxStyle) void {
     style.deinit();
 }
 
-export fn syntaxStyleRegister(style: *syntax_style.SyntaxStyle, namePtr: [*]const u8, nameLen: usize, fg: ?[*]const f32, bg: ?[*]const f32, attributes: u32) u32 {
+pub export fn syntaxStyleRegister(style: *syntax_style.SyntaxStyle, namePtr: [*]const u8, nameLen: usize, fg: ?[*]const f32, bg: ?[*]const f32, attributes: u32) u32 {
     const name = namePtr[0..nameLen];
     const fgColor = if (fg) |fgPtr| utils.f32PtrToRGBA(fgPtr) else null;
     const bgColor = if (bg) |bgPtr| utils.f32PtrToRGBA(bgPtr) else null;
     return style.registerStyle(name, fgColor, bgColor, attributes) catch 0;
 }
 
-export fn syntaxStyleResolveByName(style: *syntax_style.SyntaxStyle, namePtr: [*]const u8, nameLen: usize) u32 {
+pub export fn syntaxStyleResolveByName(style: *syntax_style.SyntaxStyle, namePtr: [*]const u8, nameLen: usize) u32 {
     const name = namePtr[0..nameLen];
     return style.resolveByName(name) orelse 0;
 }
 
-export fn syntaxStyleGetStyleCount(style: *syntax_style.SyntaxStyle) usize {
+pub export fn syntaxStyleGetStyleCount(style: *syntax_style.SyntaxStyle) usize {
     return style.getStyleCount();
 }
 
@@ -1474,7 +1474,7 @@ pub const EncodedChar = extern struct {
     char: u32,
 };
 
-export fn encodeUnicode(
+pub export fn encodeUnicode(
     textPtr: [*]const u8,
     textLen: usize,
     outPtr: *[*]EncodedChar,
@@ -1596,7 +1596,7 @@ export fn encodeUnicode(
     return true;
 }
 
-export fn freeUnicode(charsPtr: [*]const EncodedChar, charsLen: usize) void {
+pub export fn freeUnicode(charsPtr: [*]const EncodedChar, charsLen: usize) void {
     const chars = charsPtr[0..charsLen];
     const pool = gp.initGlobalPool(globalArena);
 
@@ -1614,7 +1614,7 @@ export fn freeUnicode(charsPtr: [*]const EncodedChar, charsLen: usize) void {
     globalAllocator.free(chars);
 }
 
-export fn bufferDrawChar(
+pub export fn bufferDrawChar(
     bufferPtr: *buffer.OptimizedBuffer,
     char: u32,
     x: u32,
