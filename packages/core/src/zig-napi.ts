@@ -67,6 +67,122 @@ interface NapiSymbols {
   getCurrentBuffer: (renderer: Pointer) => Pointer | null
   getBufferWidth: (buffer: Pointer) => number
   getBufferHeight: (buffer: Pointer) => number
+  createOptimizedBuffer: (
+    width: number,
+    height: number,
+    respectAlpha: boolean,
+    widthMethod: number,
+    id: string,
+  ) => Pointer | null
+  destroyOptimizedBuffer: (buffer: Pointer) => void
+  drawFrameBuffer: (
+    targetBuffer: Pointer,
+    destX: number,
+    destY: number,
+    frameBuffer: Pointer,
+    sourceX: number,
+    sourceY: number,
+    sourceWidth: number,
+    sourceHeight: number,
+  ) => void
+  bufferClear: (buffer: Pointer, bg: Float32Array) => void
+  bufferGetCharPtr: (buffer: Pointer) => Pointer
+  bufferGetFgPtr: (buffer: Pointer) => Pointer
+  bufferGetBgPtr: (buffer: Pointer) => Pointer
+  bufferGetAttributesPtr: (buffer: Pointer) => Pointer
+  bufferGetRespectAlpha: (buffer: Pointer) => boolean
+  bufferSetRespectAlpha: (buffer: Pointer, respectAlpha: boolean) => void
+  bufferGetId: (buffer: Pointer) => string
+  bufferGetRealCharSize: (buffer: Pointer) => number
+  bufferWriteResolvedChars: (buffer: Pointer, outputBuffer: Uint8Array, addLineBreaks: boolean) => number
+  bufferDrawText: (
+    buffer: Pointer,
+    text: string,
+    x: number,
+    y: number,
+    fg: Float32Array,
+    bg: Float32Array | null,
+    attributes: number,
+  ) => void
+  bufferSetCellWithAlphaBlending: (
+    buffer: Pointer,
+    x: number,
+    y: number,
+    char: number,
+    fg: Float32Array,
+    bg: Float32Array,
+    attributes: number,
+  ) => void
+  bufferSetCell: (
+    buffer: Pointer,
+    x: number,
+    y: number,
+    char: number,
+    fg: Float32Array,
+    bg: Float32Array,
+    attributes: number,
+  ) => void
+  bufferFillRect: (buffer: Pointer, x: number, y: number, width: number, height: number, bg: Float32Array) => void
+  bufferDrawSuperSampleBuffer: (
+    buffer: Pointer,
+    x: number,
+    y: number,
+    pixelDataPtr: Pointer,
+    pixelDataLength: number,
+    format: number,
+    alignedBytesPerRow: number,
+  ) => void
+  bufferDrawPackedBuffer: (
+    buffer: Pointer,
+    dataPtr: Pointer,
+    dataLen: number,
+    posX: number,
+    posY: number,
+    terminalWidthCells: number,
+    terminalHeightCells: number,
+  ) => void
+  bufferDrawGrayscaleBuffer: (
+    buffer: Pointer,
+    posX: number,
+    posY: number,
+    intensitiesPtr: Pointer,
+    srcWidth: number,
+    srcHeight: number,
+    fg: Float32Array | null,
+    bg: Float32Array | null,
+  ) => void
+  bufferDrawGrayscaleBufferSupersampled: (
+    buffer: Pointer,
+    posX: number,
+    posY: number,
+    intensitiesPtr: Pointer,
+    srcWidth: number,
+    srcHeight: number,
+    fg: Float32Array | null,
+    bg: Float32Array | null,
+  ) => void
+  bufferDrawBox: (
+    buffer: Pointer,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    borderChars: Uint32Array,
+    packedOptions: number,
+    borderColor: Float32Array,
+    backgroundColor: Float32Array,
+    title: string | null,
+  ) => void
+  bufferResize: (buffer: Pointer, width: number, height: number) => void
+  bufferPushScissorRect: (buffer: Pointer, x: number, y: number, width: number, height: number) => void
+  bufferPopScissorRect: (buffer: Pointer) => void
+  bufferClearScissorRects: (buffer: Pointer) => void
+  bufferPushOpacity: (buffer: Pointer, opacity: number) => void
+  bufferPopOpacity: (buffer: Pointer) => void
+  bufferGetCurrentOpacity: (buffer: Pointer) => number
+  bufferClearOpacity: (buffer: Pointer) => void
+  bufferDrawTextBufferView: (buffer: Pointer, view: Pointer, x: number, y: number) => void
+  bufferDrawEditorView: (buffer: Pointer, view: Pointer, x: number, y: number) => void
   resizeRenderer: (renderer: Pointer, width: number, height: number) => void
 
   setCursorPosition: (renderer: Pointer, x: number, y: number, visible: boolean) => void
@@ -137,6 +253,38 @@ const REQUIRED_SYMBOLS = [
   "getCurrentBuffer",
   "getBufferWidth",
   "getBufferHeight",
+  "createOptimizedBuffer",
+  "destroyOptimizedBuffer",
+  "drawFrameBuffer",
+  "bufferClear",
+  "bufferGetCharPtr",
+  "bufferGetFgPtr",
+  "bufferGetBgPtr",
+  "bufferGetAttributesPtr",
+  "bufferGetRespectAlpha",
+  "bufferSetRespectAlpha",
+  "bufferGetId",
+  "bufferGetRealCharSize",
+  "bufferWriteResolvedChars",
+  "bufferDrawText",
+  "bufferSetCellWithAlphaBlending",
+  "bufferSetCell",
+  "bufferFillRect",
+  "bufferDrawSuperSampleBuffer",
+  "bufferDrawPackedBuffer",
+  "bufferDrawGrayscaleBuffer",
+  "bufferDrawGrayscaleBufferSupersampled",
+  "bufferDrawBox",
+  "bufferResize",
+  "bufferPushScissorRect",
+  "bufferPopScissorRect",
+  "bufferClearScissorRects",
+  "bufferPushOpacity",
+  "bufferPopOpacity",
+  "bufferGetCurrentOpacity",
+  "bufferClearOpacity",
+  "bufferDrawTextBufferView",
+  "bufferDrawEditorView",
   "resizeRenderer",
   "setCursorPosition",
   "setCursorStyle",
@@ -185,6 +333,10 @@ function assertSymbols(raw: unknown): asserts raw is NapiSymbols {
 }
 
 type OpenTUILib = { symbols: NapiSymbols }
+
+function normalizePointer(pointer: Pointer): Pointer {
+  return (typeof pointer === "bigint" ? Number(pointer) : pointer) as Pointer
+}
 
 export function getOpenTUILib(libPath?: string): OpenTUILib {
   const resolvedAddonPath = libPath || targetAddonPath
@@ -481,6 +633,297 @@ export class NapiRenderLib implements RenderLib {
     this.opentui.symbols.bufferDrawChar(buffer, char, x, y, fg.buffer, bg.buffer, attributes)
   }
 
+  public createOptimizedBuffer(
+    width: number,
+    height: number,
+    widthMethod: WidthMethod,
+    respectAlpha: boolean = false,
+    id?: string,
+  ): OptimizedBuffer {
+    if (Number.isNaN(width) || Number.isNaN(height)) {
+      console.error(new Error(`Invalid dimensions for OptimizedBuffer: ${width}x${height}`).stack)
+    }
+
+    const widthMethodCode = widthMethod === "wcwidth" ? 0 : 1
+    const idToUse = id || "unnamed buffer"
+    const bufferPtr = this.opentui.symbols.createOptimizedBuffer(width, height, respectAlpha, widthMethodCode, idToUse)
+    if (!bufferPtr) {
+      throw new Error(`Failed to create optimized buffer: ${width}x${height}`)
+    }
+
+    return new OptimizedBuffer(this, bufferPtr, width, height, { respectAlpha, id, widthMethod })
+  }
+
+  public destroyOptimizedBuffer(bufferPtr: Pointer): void {
+    this.opentui.symbols.destroyOptimizedBuffer(bufferPtr)
+  }
+
+  public drawFrameBuffer(
+    targetBufferPtr: Pointer,
+    destX: number,
+    destY: number,
+    bufferPtr: Pointer,
+    sourceX?: number,
+    sourceY?: number,
+    sourceWidth?: number,
+    sourceHeight?: number,
+  ): void {
+    const srcX = sourceX ?? 0
+    const srcY = sourceY ?? 0
+    const srcWidth = sourceWidth ?? 0
+    const srcHeight = sourceHeight ?? 0
+    this.opentui.symbols.drawFrameBuffer(targetBufferPtr, destX, destY, bufferPtr, srcX, srcY, srcWidth, srcHeight)
+  }
+
+  public bufferClear(buffer: Pointer, color: RGBA): void {
+    this.opentui.symbols.bufferClear(buffer, color.buffer)
+  }
+
+  public bufferGetCharPtr(buffer: Pointer): Pointer {
+    const ptr = this.opentui.symbols.bufferGetCharPtr(buffer)
+    if (!ptr) throw new Error("Failed to get char pointer")
+    return ptr
+  }
+
+  public bufferGetFgPtr(buffer: Pointer): Pointer {
+    const ptr = this.opentui.symbols.bufferGetFgPtr(buffer)
+    if (!ptr) throw new Error("Failed to get fg pointer")
+    return ptr
+  }
+
+  public bufferGetBgPtr(buffer: Pointer): Pointer {
+    const ptr = this.opentui.symbols.bufferGetBgPtr(buffer)
+    if (!ptr) throw new Error("Failed to get bg pointer")
+    return ptr
+  }
+
+  public bufferGetAttributesPtr(buffer: Pointer): Pointer {
+    const ptr = this.opentui.symbols.bufferGetAttributesPtr(buffer)
+    if (!ptr) throw new Error("Failed to get attributes pointer")
+    return ptr
+  }
+
+  public bufferGetRespectAlpha(buffer: Pointer): boolean {
+    return this.opentui.symbols.bufferGetRespectAlpha(buffer)
+  }
+
+  public bufferSetRespectAlpha(buffer: Pointer, respectAlpha: boolean): void {
+    this.opentui.symbols.bufferSetRespectAlpha(buffer, respectAlpha)
+  }
+
+  public bufferGetId(buffer: Pointer): string {
+    return this.opentui.symbols.bufferGetId(buffer)
+  }
+
+  public bufferGetRealCharSize(buffer: Pointer): number {
+    return this.opentui.symbols.bufferGetRealCharSize(buffer)
+  }
+
+  public bufferWriteResolvedChars(buffer: Pointer, outputBuffer: Uint8Array, addLineBreaks: boolean): number {
+    return this.opentui.symbols.bufferWriteResolvedChars(buffer, outputBuffer, addLineBreaks)
+  }
+
+  public bufferDrawText(
+    buffer: Pointer,
+    text: string,
+    x: number,
+    y: number,
+    color: RGBA,
+    bgColor?: RGBA,
+    attributes?: number,
+  ): void {
+    this.opentui.symbols.bufferDrawText(buffer, text, x, y, color.buffer, bgColor?.buffer ?? null, attributes ?? 0)
+  }
+
+  public bufferSetCellWithAlphaBlending(
+    buffer: Pointer,
+    x: number,
+    y: number,
+    char: string,
+    color: RGBA,
+    bgColor: RGBA,
+    attributes?: number,
+  ): void {
+    const charCode = char.codePointAt(0) ?? " ".codePointAt(0)!
+    this.opentui.symbols.bufferSetCellWithAlphaBlending(
+      buffer,
+      x,
+      y,
+      charCode,
+      color.buffer,
+      bgColor.buffer,
+      attributes ?? 0,
+    )
+  }
+
+  public bufferSetCell(
+    buffer: Pointer,
+    x: number,
+    y: number,
+    char: string,
+    color: RGBA,
+    bgColor: RGBA,
+    attributes?: number,
+  ): void {
+    const charCode = char.codePointAt(0) ?? " ".codePointAt(0)!
+    this.opentui.symbols.bufferSetCell(buffer, x, y, charCode, color.buffer, bgColor.buffer, attributes ?? 0)
+  }
+
+  public bufferFillRect(buffer: Pointer, x: number, y: number, width: number, height: number, color: RGBA): void {
+    this.opentui.symbols.bufferFillRect(buffer, x, y, width, height, color.buffer)
+  }
+
+  public bufferDrawSuperSampleBuffer(
+    buffer: Pointer,
+    x: number,
+    y: number,
+    pixelDataPtr: Pointer,
+    pixelDataLength: number,
+    format: "bgra8unorm" | "rgba8unorm",
+    alignedBytesPerRow: number,
+  ): void {
+    const formatId = format === "bgra8unorm" ? 0 : 1
+    this.opentui.symbols.bufferDrawSuperSampleBuffer(
+      buffer,
+      x,
+      y,
+      normalizePointer(pixelDataPtr),
+      pixelDataLength,
+      formatId,
+      alignedBytesPerRow,
+    )
+  }
+
+  public bufferDrawPackedBuffer(
+    buffer: Pointer,
+    dataPtr: Pointer,
+    dataLen: number,
+    posX: number,
+    posY: number,
+    terminalWidthCells: number,
+    terminalHeightCells: number,
+  ): void {
+    this.opentui.symbols.bufferDrawPackedBuffer(
+      buffer,
+      normalizePointer(dataPtr),
+      dataLen,
+      posX,
+      posY,
+      terminalWidthCells,
+      terminalHeightCells,
+    )
+  }
+
+  public bufferDrawGrayscaleBuffer(
+    buffer: Pointer,
+    posX: number,
+    posY: number,
+    intensitiesPtr: Pointer,
+    srcWidth: number,
+    srcHeight: number,
+    fg: RGBA | null,
+    bg: RGBA | null,
+  ): void {
+    this.opentui.symbols.bufferDrawGrayscaleBuffer(
+      buffer,
+      posX,
+      posY,
+      normalizePointer(intensitiesPtr),
+      srcWidth,
+      srcHeight,
+      fg?.buffer ?? null,
+      bg?.buffer ?? null,
+    )
+  }
+
+  public bufferDrawGrayscaleBufferSupersampled(
+    buffer: Pointer,
+    posX: number,
+    posY: number,
+    intensitiesPtr: Pointer,
+    srcWidth: number,
+    srcHeight: number,
+    fg: RGBA | null,
+    bg: RGBA | null,
+  ): void {
+    this.opentui.symbols.bufferDrawGrayscaleBufferSupersampled(
+      buffer,
+      posX,
+      posY,
+      normalizePointer(intensitiesPtr),
+      srcWidth,
+      srcHeight,
+      fg?.buffer ?? null,
+      bg?.buffer ?? null,
+    )
+  }
+
+  public bufferDrawBox(
+    buffer: Pointer,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    borderChars: Uint32Array,
+    packedOptions: number,
+    borderColor: RGBA,
+    backgroundColor: RGBA,
+    title: string | null,
+  ): void {
+    this.opentui.symbols.bufferDrawBox(
+      buffer,
+      x,
+      y,
+      width,
+      height,
+      borderChars,
+      packedOptions,
+      borderColor.buffer,
+      backgroundColor.buffer,
+      title,
+    )
+  }
+
+  public bufferResize(buffer: Pointer, width: number, height: number): void {
+    this.opentui.symbols.bufferResize(buffer, width, height)
+  }
+
+  public bufferPushScissorRect(buffer: Pointer, x: number, y: number, width: number, height: number): void {
+    this.opentui.symbols.bufferPushScissorRect(buffer, x, y, width, height)
+  }
+
+  public bufferPopScissorRect(buffer: Pointer): void {
+    this.opentui.symbols.bufferPopScissorRect(buffer)
+  }
+
+  public bufferClearScissorRects(buffer: Pointer): void {
+    this.opentui.symbols.bufferClearScissorRects(buffer)
+  }
+
+  public bufferPushOpacity(buffer: Pointer, opacity: number): void {
+    this.opentui.symbols.bufferPushOpacity(buffer, opacity)
+  }
+
+  public bufferPopOpacity(buffer: Pointer): void {
+    this.opentui.symbols.bufferPopOpacity(buffer)
+  }
+
+  public bufferGetCurrentOpacity(buffer: Pointer): number {
+    return this.opentui.symbols.bufferGetCurrentOpacity(buffer)
+  }
+
+  public bufferClearOpacity(buffer: Pointer): void {
+    this.opentui.symbols.bufferClearOpacity(buffer)
+  }
+
+  public bufferDrawTextBufferView(buffer: Pointer, view: Pointer, x: number, y: number): void {
+    this.opentui.symbols.bufferDrawTextBufferView(buffer, view, x, y)
+  }
+
+  public bufferDrawEditorView(buffer: Pointer, view: Pointer, x: number, y: number): void {
+    this.opentui.symbols.bufferDrawEditorView(buffer, view, x, y)
+  }
+
   public onNativeEvent(name: string, handler: (data: ArrayBuffer) => void): void {
     this._nativeEvents.on(name, handler)
   }
@@ -497,113 +940,6 @@ export class NapiRenderLib implements RenderLib {
     this._anyEventHandlers.push(handler)
   }
 
-  createOptimizedBuffer!: (
-    width: number,
-    height: number,
-    widthMethod: WidthMethod,
-    respectAlpha?: boolean,
-    id?: string,
-  ) => OptimizedBuffer
-  destroyOptimizedBuffer!: (bufferPtr: Pointer) => void
-  drawFrameBuffer!: (
-    targetBufferPtr: Pointer,
-    destX: number,
-    destY: number,
-    bufferPtr: Pointer,
-    sourceX?: number,
-    sourceY?: number,
-    sourceWidth?: number,
-    sourceHeight?: number,
-  ) => void
-  bufferClear!: (buffer: Pointer, color: RGBA) => void
-  bufferGetCharPtr!: (buffer: Pointer) => Pointer
-  bufferGetFgPtr!: (buffer: Pointer) => Pointer
-  bufferGetBgPtr!: (buffer: Pointer) => Pointer
-  bufferGetAttributesPtr!: (buffer: Pointer) => Pointer
-  bufferGetRespectAlpha!: (buffer: Pointer) => boolean
-  bufferSetRespectAlpha!: (buffer: Pointer, respectAlpha: boolean) => void
-  bufferGetId!: (buffer: Pointer) => string
-  bufferGetRealCharSize!: (buffer: Pointer) => number
-  bufferWriteResolvedChars!: (buffer: Pointer, outputBuffer: Uint8Array, addLineBreaks: boolean) => number
-  bufferDrawText!: (
-    buffer: Pointer,
-    text: string,
-    x: number,
-    y: number,
-    color: RGBA,
-    bgColor?: RGBA,
-    attributes?: number,
-  ) => void
-  bufferSetCellWithAlphaBlending!: (
-    buffer: Pointer,
-    x: number,
-    y: number,
-    char: string,
-    color: RGBA,
-    bgColor: RGBA,
-    attributes?: number,
-  ) => void
-  bufferSetCell!: (
-    buffer: Pointer,
-    x: number,
-    y: number,
-    char: string,
-    color: RGBA,
-    bgColor: RGBA,
-    attributes?: number,
-  ) => void
-  bufferFillRect!: (buffer: Pointer, x: number, y: number, width: number, height: number, color: RGBA) => void
-  bufferDrawSuperSampleBuffer!: (
-    buffer: Pointer,
-    x: number,
-    y: number,
-    pixelDataPtr: Pointer,
-    pixelDataLength: number,
-    format: "bgra8unorm" | "rgba8unorm",
-    alignedBytesPerRow: number,
-  ) => void
-  bufferDrawPackedBuffer!: (
-    buffer: Pointer,
-    dataPtr: Pointer,
-    dataLen: number,
-    posX: number,
-    posY: number,
-    terminalWidthCells: number,
-    terminalHeightCells: number,
-  ) => void
-  bufferDrawGrayscaleBuffer!: (
-    buffer: Pointer,
-    posX: number,
-    posY: number,
-    intensitiesPtr: Pointer,
-    srcWidth: number,
-    srcHeight: number,
-    fg: RGBA | null,
-    bg: RGBA | null,
-  ) => void
-  bufferDrawGrayscaleBufferSupersampled!: (
-    buffer: Pointer,
-    posX: number,
-    posY: number,
-    intensitiesPtr: Pointer,
-    srcWidth: number,
-    srcHeight: number,
-    fg: RGBA | null,
-    bg: RGBA | null,
-  ) => void
-  bufferDrawBox!: (
-    buffer: Pointer,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    borderChars: Uint32Array,
-    packedOptions: number,
-    borderColor: RGBA,
-    backgroundColor: RGBA,
-    title: string | null,
-  ) => void
-  bufferResize!: (buffer: Pointer, width: number, height: number) => void
   createTextBuffer!: (widthMethod: WidthMethod) => TextBuffer
   destroyTextBuffer!: (buffer: Pointer) => void
   textBufferGetLength!: (buffer: Pointer) => number
@@ -691,8 +1027,6 @@ export class NapiRenderLib implements RenderLib {
     height: number,
   ) => { lineCount: number; maxWidth: number } | null
   textBufferViewGetVirtualLineCount!: (view: Pointer) => number
-  bufferDrawTextBufferView!: (buffer: Pointer, view: Pointer, x: number, y: number) => void
-  bufferDrawEditorView!: (buffer: Pointer, view: Pointer, x: number, y: number) => void
   createEditBuffer!: (widthMethod: WidthMethod) => Pointer
   destroyEditBuffer!: (buffer: Pointer) => void
   editBufferSetText!: (buffer: Pointer, textBytes: Uint8Array) => void
@@ -822,13 +1156,6 @@ export class NapiRenderLib implements RenderLib {
   ) => void
   editorViewSetTabIndicator!: (view: Pointer, indicator: number) => void
   editorViewSetTabIndicatorColor!: (view: Pointer, color: RGBA) => void
-  bufferPushScissorRect!: (buffer: Pointer, x: number, y: number, width: number, height: number) => void
-  bufferPopScissorRect!: (buffer: Pointer) => void
-  bufferClearScissorRects!: (buffer: Pointer) => void
-  bufferPushOpacity!: (buffer: Pointer, opacity: number) => void
-  bufferPopOpacity!: (buffer: Pointer) => void
-  bufferGetCurrentOpacity!: (buffer: Pointer) => number
-  bufferClearOpacity!: (buffer: Pointer) => void
   textBufferAddHighlightByCharRange!: (buffer: Pointer, highlight: Highlight) => void
   textBufferAddHighlight!: (buffer: Pointer, lineIdx: number, highlight: Highlight) => void
   textBufferRemoveHighlightsByRef!: (buffer: Pointer, hlRef: number) => void

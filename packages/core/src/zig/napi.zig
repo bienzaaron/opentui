@@ -5,6 +5,8 @@ const lib = @import("lib");
 const CliRenderer = lib.CliRenderer;
 const OptimizedBuffer = lib.OptimizedBuffer;
 const RGBA = lib.RGBA;
+const TextBufferView = lib.TextBufferView;
+const EditorView = lib.EditorView;
 
 var callback_env: ?napi.Env = null;
 var log_callback: ?napi.Value = null;
@@ -114,6 +116,29 @@ fn extractBytesAlloc(allocator: std.mem.Allocator, val: napi.Value) ![]u8 {
 fn rgbaFromValue(val: napi.Value) !RGBA {
     const f32_values = try extractFloat32Array(val, 4);
     return .{ f32_values[0], f32_values[1], f32_values[2], f32_values[3] };
+}
+
+fn optionalRgbaFromValue(val: napi.Value) !?RGBA {
+    const value_type = try val.typeOf();
+    if (value_type == .Null or value_type == .Undefined) {
+        return null;
+    }
+    return try rgbaFromValue(val);
+}
+
+fn extractU32ArrayAlloc(allocator: std.mem.Allocator, val: napi.Value) ![]u32 {
+    const len_val = try val.getNamedProperty("length");
+    const coerced_len = try len_val.coerceTo(.Number);
+    const len_u32 = try coerced_len.getValue(u32);
+    const len: usize = @intCast(len_u32);
+
+    var out = try allocator.alloc(u32, len);
+    for (0..len) |i| {
+        const element = try val.getElement(@intCast(i));
+        const number = try element.coerceTo(.Number);
+        out[i] = try number.getValue(u32);
+    }
+    return out;
 }
 
 fn bytesToArrayBuffer(env: napi.Env, bytes: []const u8) !napi.Value {
@@ -543,6 +568,356 @@ fn bufferDrawChar(env: napi.Env, buffer_ptr_val: napi.Value, char_val: napi.Valu
     return try env.getNull();
 }
 
+fn createOptimizedBuffer(env: napi.Env, width_val: napi.Value, height_val: napi.Value, respect_alpha_val: napi.Value, width_method_val: napi.Value, id_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const width = try extractU32(width_val);
+    const height = try extractU32(height_val);
+    const respect_alpha = try extractBool(respect_alpha_val);
+    const width_method = try extractU8(width_method_val);
+    const id = try extractUtf8Alloc(allocator, id_val);
+    defer allocator.free(id);
+
+    return optionalPtrToValue(env, lib.createOptimizedBuffer(width, height, respect_alpha, width_method, id.ptr, id.len));
+}
+
+fn destroyOptimizedBuffer(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    lib.destroyOptimizedBuffer(buffer_ptr);
+    return try env.getNull();
+}
+
+fn drawFrameBuffer(env: napi.Env, target_ptr_val: napi.Value, dest_x_val: napi.Value, dest_y_val: napi.Value, frame_ptr_val: napi.Value, source_x_val: napi.Value, source_y_val: napi.Value, source_width_val: napi.Value, source_height_val: napi.Value) !napi.Value {
+    const target_ptr = try valueToPtr(*OptimizedBuffer, target_ptr_val);
+    const dest_x = try extractI32(dest_x_val);
+    const dest_y = try extractI32(dest_y_val);
+    const frame_ptr = try valueToPtr(*OptimizedBuffer, frame_ptr_val);
+    const source_x = try extractU32(source_x_val);
+    const source_y = try extractU32(source_y_val);
+    const source_width = try extractU32(source_width_val);
+    const source_height = try extractU32(source_height_val);
+
+    lib.drawFrameBuffer(target_ptr, dest_x, dest_y, frame_ptr, source_x, source_y, source_width, source_height);
+    return try env.getNull();
+}
+
+fn bufferClear(env: napi.Env, buffer_ptr_val: napi.Value, bg_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const bg = try rgbaFromValue(bg_val);
+    lib.bufferClear(buffer_ptr, @as([*]const f32, @ptrCast(&bg)));
+    return try env.getNull();
+}
+
+fn bufferGetCharPtr(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    return try ptrToValue(env, lib.bufferGetCharPtr(buffer_ptr));
+}
+
+fn bufferGetFgPtr(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    return try ptrToValue(env, lib.bufferGetFgPtr(buffer_ptr));
+}
+
+fn bufferGetBgPtr(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    return try ptrToValue(env, lib.bufferGetBgPtr(buffer_ptr));
+}
+
+fn bufferGetAttributesPtr(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    return try ptrToValue(env, lib.bufferGetAttributesPtr(buffer_ptr));
+}
+
+fn bufferGetRespectAlpha(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    return try env.getBoolean(lib.bufferGetRespectAlpha(buffer_ptr));
+}
+
+fn bufferSetRespectAlpha(env: napi.Env, buffer_ptr_val: napi.Value, respect_alpha_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const respect_alpha = try extractBool(respect_alpha_val);
+    lib.bufferSetRespectAlpha(buffer_ptr, respect_alpha);
+    return try env.getNull();
+}
+
+fn bufferGetId(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    var out: [1024]u8 = undefined;
+    const len = lib.bufferGetId(buffer_ptr, &out, out.len);
+    return try env.createString(.utf8, out[0..len]);
+}
+
+fn bufferGetRealCharSize(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    return napi.Value.createFrom(u32, env, lib.bufferGetRealCharSize(buffer_ptr));
+}
+
+fn bufferWriteResolvedChars(env: napi.Env, buffer_ptr_val: napi.Value, output_buffer_val: napi.Value, add_line_breaks_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const add_line_breaks = try extractBool(add_line_breaks_val);
+
+    const len_val = try output_buffer_val.getNamedProperty("length");
+    const len_num = try (try len_val.coerceTo(.Number)).getValue(u32);
+    const out_len: usize = @intCast(len_num);
+
+    const temp = try allocator.alloc(u8, out_len);
+    defer allocator.free(temp);
+
+    const written = lib.bufferWriteResolvedChars(buffer_ptr, temp.ptr, temp.len, add_line_breaks);
+
+    for (0..out_len) |i| {
+        const byte_val = try napi.Value.createFrom(u32, env, @as(u32, temp[i]));
+        try output_buffer_val.setElement(@intCast(i), byte_val);
+    }
+
+    return napi.Value.createFrom(u32, env, written);
+}
+
+fn bufferDrawText(env: napi.Env, buffer_ptr_val: napi.Value, text_val: napi.Value, x_val: napi.Value, y_val: napi.Value, fg_val: napi.Value, bg_val: napi.Value, attributes_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const text = try extractUtf8Alloc(allocator, text_val);
+    defer allocator.free(text);
+    const x = try extractU32(x_val);
+    const y = try extractU32(y_val);
+    const fg = try rgbaFromValue(fg_val);
+    const bg_opt = try optionalRgbaFromValue(bg_val);
+    const attributes = try extractU32(attributes_val);
+
+    var bg_color: RGBA = undefined;
+    const bg_ptr: ?[*]const f32 = if (bg_opt) |bg| blk: {
+        bg_color = bg;
+        break :blk @as([*]const f32, @ptrCast(&bg_color));
+    } else null;
+
+    lib.bufferDrawText(buffer_ptr, text.ptr, text.len, x, y, @as([*]const f32, @ptrCast(&fg)), bg_ptr, attributes);
+    return try env.getNull();
+}
+
+fn bufferSetCellWithAlphaBlending(env: napi.Env, buffer_ptr_val: napi.Value, x_val: napi.Value, y_val: napi.Value, char_val: napi.Value, fg_val: napi.Value, bg_val: napi.Value, attributes_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const x = try extractU32(x_val);
+    const y = try extractU32(y_val);
+    const char = try extractU32(char_val);
+    const fg = try rgbaFromValue(fg_val);
+    const bg = try rgbaFromValue(bg_val);
+    const attributes = try extractU32(attributes_val);
+
+    lib.bufferSetCellWithAlphaBlending(buffer_ptr, x, y, char, @as([*]const f32, @ptrCast(&fg)), @as([*]const f32, @ptrCast(&bg)), attributes);
+    return try env.getNull();
+}
+
+fn bufferSetCell(env: napi.Env, buffer_ptr_val: napi.Value, x_val: napi.Value, y_val: napi.Value, char_val: napi.Value, fg_val: napi.Value, bg_val: napi.Value, attributes_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const x = try extractU32(x_val);
+    const y = try extractU32(y_val);
+    const char = try extractU32(char_val);
+    const fg = try rgbaFromValue(fg_val);
+    const bg = try rgbaFromValue(bg_val);
+    const attributes = try extractU32(attributes_val);
+
+    lib.bufferSetCell(buffer_ptr, x, y, char, @as([*]const f32, @ptrCast(&fg)), @as([*]const f32, @ptrCast(&bg)), attributes);
+    return try env.getNull();
+}
+
+fn bufferFillRect(env: napi.Env, buffer_ptr_val: napi.Value, x_val: napi.Value, y_val: napi.Value, width_val: napi.Value, height_val: napi.Value, bg_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const x = try extractU32(x_val);
+    const y = try extractU32(y_val);
+    const width = try extractU32(width_val);
+    const height = try extractU32(height_val);
+    const bg = try rgbaFromValue(bg_val);
+
+    lib.bufferFillRect(buffer_ptr, x, y, width, height, @as([*]const f32, @ptrCast(&bg)));
+    return try env.getNull();
+}
+
+fn bufferDrawSuperSampleBuffer(env: napi.Env, buffer_ptr_val: napi.Value, x_val: napi.Value, y_val: napi.Value, pixel_data_ptr_val: napi.Value, pixel_data_len_val: napi.Value, format_val: napi.Value, aligned_bytes_per_row_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const x = try extractU32(x_val);
+    const y = try extractU32(y_val);
+    const pixel_data_ptr = try valueToPtr([*]const u8, pixel_data_ptr_val);
+    const pixel_data_len = try extractU32(pixel_data_len_val);
+    const format = try extractU8(format_val);
+    const aligned_bytes_per_row = try extractU32(aligned_bytes_per_row_val);
+
+    lib.bufferDrawSuperSampleBuffer(buffer_ptr, x, y, pixel_data_ptr, pixel_data_len, format, aligned_bytes_per_row);
+    return try env.getNull();
+}
+
+fn bufferDrawPackedBuffer(env: napi.Env, buffer_ptr_val: napi.Value, data_ptr_val: napi.Value, data_len_val: napi.Value, pos_x_val: napi.Value, pos_y_val: napi.Value, terminal_width_cells_val: napi.Value, terminal_height_cells_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const data_ptr = try valueToPtr([*]const u8, data_ptr_val);
+    const data_len = try extractU32(data_len_val);
+    const pos_x = try extractU32(pos_x_val);
+    const pos_y = try extractU32(pos_y_val);
+    const terminal_width_cells = try extractU32(terminal_width_cells_val);
+    const terminal_height_cells = try extractU32(terminal_height_cells_val);
+
+    lib.bufferDrawPackedBuffer(buffer_ptr, data_ptr, data_len, pos_x, pos_y, terminal_width_cells, terminal_height_cells);
+    return try env.getNull();
+}
+
+fn bufferDrawGrayscaleBuffer(env: napi.Env, buffer_ptr_val: napi.Value, pos_x_val: napi.Value, pos_y_val: napi.Value, intensities_ptr_val: napi.Value, src_width_val: napi.Value, src_height_val: napi.Value, fg_val: napi.Value, bg_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const pos_x = try extractI32(pos_x_val);
+    const pos_y = try extractI32(pos_y_val);
+    const intensities_ptr = try valueToPtr([*]const f32, intensities_ptr_val);
+    const src_width = try extractU32(src_width_val);
+    const src_height = try extractU32(src_height_val);
+    const fg_opt = try optionalRgbaFromValue(fg_val);
+    const bg_opt = try optionalRgbaFromValue(bg_val);
+
+    var fg_color: RGBA = undefined;
+    var bg_color: RGBA = undefined;
+    const fg_ptr: ?[*]const f32 = if (fg_opt) |fg| blk: {
+        fg_color = fg;
+        break :blk @as([*]const f32, @ptrCast(&fg_color));
+    } else null;
+    const bg_ptr: ?[*]const f32 = if (bg_opt) |bg| blk: {
+        bg_color = bg;
+        break :blk @as([*]const f32, @ptrCast(&bg_color));
+    } else null;
+
+    lib.bufferDrawGrayscaleBuffer(buffer_ptr, pos_x, pos_y, intensities_ptr, src_width, src_height, fg_ptr, bg_ptr);
+    return try env.getNull();
+}
+
+fn bufferDrawGrayscaleBufferSupersampled(env: napi.Env, buffer_ptr_val: napi.Value, pos_x_val: napi.Value, pos_y_val: napi.Value, intensities_ptr_val: napi.Value, src_width_val: napi.Value, src_height_val: napi.Value, fg_val: napi.Value, bg_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const pos_x = try extractI32(pos_x_val);
+    const pos_y = try extractI32(pos_y_val);
+    const intensities_ptr = try valueToPtr([*]const f32, intensities_ptr_val);
+    const src_width = try extractU32(src_width_val);
+    const src_height = try extractU32(src_height_val);
+    const fg_opt = try optionalRgbaFromValue(fg_val);
+    const bg_opt = try optionalRgbaFromValue(bg_val);
+
+    var fg_color: RGBA = undefined;
+    var bg_color: RGBA = undefined;
+    const fg_ptr: ?[*]const f32 = if (fg_opt) |fg| blk: {
+        fg_color = fg;
+        break :blk @as([*]const f32, @ptrCast(&fg_color));
+    } else null;
+    const bg_ptr: ?[*]const f32 = if (bg_opt) |bg| blk: {
+        bg_color = bg;
+        break :blk @as([*]const f32, @ptrCast(&bg_color));
+    } else null;
+
+    lib.bufferDrawGrayscaleBufferSupersampled(buffer_ptr, pos_x, pos_y, intensities_ptr, src_width, src_height, fg_ptr, bg_ptr);
+    return try env.getNull();
+}
+
+fn bufferDrawBox(env: napi.Env, buffer_ptr_val: napi.Value, x_val: napi.Value, y_val: napi.Value, width_val: napi.Value, height_val: napi.Value, border_chars_val: napi.Value, packed_options_val: napi.Value, border_color_val: napi.Value, background_color_val: napi.Value, title_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const x = try extractI32(x_val);
+    const y = try extractI32(y_val);
+    const width = try extractU32(width_val);
+    const height = try extractU32(height_val);
+    const border_chars = try extractU32ArrayAlloc(allocator, border_chars_val);
+    defer allocator.free(border_chars);
+    const packed_options = try extractU32(packed_options_val);
+    const border_color = try rgbaFromValue(border_color_val);
+    const background_color = try rgbaFromValue(background_color_val);
+
+    const title_type = try title_val.typeOf();
+    const title_bytes: ?[]u8 = if (title_type == .Null or title_type == .Undefined) null else try extractUtf8Alloc(allocator, title_val);
+    defer if (title_bytes) |bytes| allocator.free(bytes);
+
+    const title_ptr: ?[*]const u8 = if (title_bytes) |bytes| bytes.ptr else null;
+    const title_len: u32 = if (title_bytes) |bytes| @intCast(bytes.len) else 0;
+
+    lib.bufferDrawBox(
+        buffer_ptr,
+        x,
+        y,
+        width,
+        height,
+        border_chars.ptr,
+        packed_options,
+        @as([*]const f32, @ptrCast(&border_color)),
+        @as([*]const f32, @ptrCast(&background_color)),
+        title_ptr,
+        title_len,
+    );
+    return try env.getNull();
+}
+
+fn bufferResize(env: napi.Env, buffer_ptr_val: napi.Value, width_val: napi.Value, height_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const width = try extractU32(width_val);
+    const height = try extractU32(height_val);
+    lib.bufferResize(buffer_ptr, width, height);
+    return try env.getNull();
+}
+
+fn bufferPushScissorRect(env: napi.Env, buffer_ptr_val: napi.Value, x_val: napi.Value, y_val: napi.Value, width_val: napi.Value, height_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const x = try extractI32(x_val);
+    const y = try extractI32(y_val);
+    const width = try extractU32(width_val);
+    const height = try extractU32(height_val);
+    lib.bufferPushScissorRect(buffer_ptr, x, y, width, height);
+    return try env.getNull();
+}
+
+fn bufferPopScissorRect(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    lib.bufferPopScissorRect(buffer_ptr);
+    return try env.getNull();
+}
+
+fn bufferClearScissorRects(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    lib.bufferClearScissorRects(buffer_ptr);
+    return try env.getNull();
+}
+
+fn bufferPushOpacity(env: napi.Env, buffer_ptr_val: napi.Value, opacity_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const opacity_f64 = try extractF64(opacity_val);
+    const opacity: f32 = @floatCast(opacity_f64);
+    lib.bufferPushOpacity(buffer_ptr, opacity);
+    return try env.getNull();
+}
+
+fn bufferPopOpacity(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    lib.bufferPopOpacity(buffer_ptr);
+    return try env.getNull();
+}
+
+fn bufferGetCurrentOpacity(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const opacity = lib.bufferGetCurrentOpacity(buffer_ptr);
+    return napi.Value.createFrom(f64, env, opacity);
+}
+
+fn bufferClearOpacity(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    lib.bufferClearOpacity(buffer_ptr);
+    return try env.getNull();
+}
+
+fn bufferDrawTextBufferView(env: napi.Env, buffer_ptr_val: napi.Value, view_ptr_val: napi.Value, x_val: napi.Value, y_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const x = try extractI32(x_val);
+    const y = try extractI32(y_val);
+    lib.bufferDrawTextBufferView(buffer_ptr, view_ptr, x, y);
+    return try env.getNull();
+}
+
+fn bufferDrawEditorView(env: napi.Env, buffer_ptr_val: napi.Value, view_ptr_val: napi.Value, x_val: napi.Value, y_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*OptimizedBuffer, buffer_ptr_val);
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    const x = try extractI32(x_val);
+    const y = try extractI32(y_val);
+    lib.bufferDrawEditorView(buffer_ptr, view_ptr, x, y);
+    return try env.getNull();
+}
+
 fn init(env: napi.Env, exports: napi.Value) !napi.Value {
     try exports.setNamedProperty("setLogCallback", try env.createFunction(setLogCallback, null));
     try exports.setNamedProperty("setEventCallback", try env.createFunction(setEventCallback, null));
@@ -559,6 +934,38 @@ fn init(env: napi.Env, exports: napi.Value) !napi.Value {
     try exports.setNamedProperty("getCurrentBuffer", try env.createFunction(getCurrentBuffer, null));
     try exports.setNamedProperty("getBufferWidth", try env.createFunction(getBufferWidth, null));
     try exports.setNamedProperty("getBufferHeight", try env.createFunction(getBufferHeight, null));
+    try exports.setNamedProperty("createOptimizedBuffer", try env.createFunction(createOptimizedBuffer, null));
+    try exports.setNamedProperty("destroyOptimizedBuffer", try env.createFunction(destroyOptimizedBuffer, null));
+    try exports.setNamedProperty("drawFrameBuffer", try env.createFunction(drawFrameBuffer, null));
+    try exports.setNamedProperty("bufferClear", try env.createFunction(bufferClear, null));
+    try exports.setNamedProperty("bufferGetCharPtr", try env.createFunction(bufferGetCharPtr, null));
+    try exports.setNamedProperty("bufferGetFgPtr", try env.createFunction(bufferGetFgPtr, null));
+    try exports.setNamedProperty("bufferGetBgPtr", try env.createFunction(bufferGetBgPtr, null));
+    try exports.setNamedProperty("bufferGetAttributesPtr", try env.createFunction(bufferGetAttributesPtr, null));
+    try exports.setNamedProperty("bufferGetRespectAlpha", try env.createFunction(bufferGetRespectAlpha, null));
+    try exports.setNamedProperty("bufferSetRespectAlpha", try env.createFunction(bufferSetRespectAlpha, null));
+    try exports.setNamedProperty("bufferGetId", try env.createFunction(bufferGetId, null));
+    try exports.setNamedProperty("bufferGetRealCharSize", try env.createFunction(bufferGetRealCharSize, null));
+    try exports.setNamedProperty("bufferWriteResolvedChars", try env.createFunction(bufferWriteResolvedChars, null));
+    try exports.setNamedProperty("bufferDrawText", try env.createFunction(bufferDrawText, null));
+    try exports.setNamedProperty("bufferSetCellWithAlphaBlending", try env.createFunction(bufferSetCellWithAlphaBlending, null));
+    try exports.setNamedProperty("bufferSetCell", try env.createFunction(bufferSetCell, null));
+    try exports.setNamedProperty("bufferFillRect", try env.createFunction(bufferFillRect, null));
+    try exports.setNamedProperty("bufferDrawSuperSampleBuffer", try env.createFunction(bufferDrawSuperSampleBuffer, null));
+    try exports.setNamedProperty("bufferDrawPackedBuffer", try env.createFunction(bufferDrawPackedBuffer, null));
+    try exports.setNamedProperty("bufferDrawGrayscaleBuffer", try env.createFunction(bufferDrawGrayscaleBuffer, null));
+    try exports.setNamedProperty("bufferDrawGrayscaleBufferSupersampled", try env.createFunction(bufferDrawGrayscaleBufferSupersampled, null));
+    try exports.setNamedProperty("bufferDrawBox", try env.createFunction(bufferDrawBox, null));
+    try exports.setNamedProperty("bufferResize", try env.createFunction(bufferResize, null));
+    try exports.setNamedProperty("bufferPushScissorRect", try env.createFunction(bufferPushScissorRect, null));
+    try exports.setNamedProperty("bufferPopScissorRect", try env.createFunction(bufferPopScissorRect, null));
+    try exports.setNamedProperty("bufferClearScissorRects", try env.createFunction(bufferClearScissorRects, null));
+    try exports.setNamedProperty("bufferPushOpacity", try env.createFunction(bufferPushOpacity, null));
+    try exports.setNamedProperty("bufferPopOpacity", try env.createFunction(bufferPopOpacity, null));
+    try exports.setNamedProperty("bufferGetCurrentOpacity", try env.createFunction(bufferGetCurrentOpacity, null));
+    try exports.setNamedProperty("bufferClearOpacity", try env.createFunction(bufferClearOpacity, null));
+    try exports.setNamedProperty("bufferDrawTextBufferView", try env.createFunction(bufferDrawTextBufferView, null));
+    try exports.setNamedProperty("bufferDrawEditorView", try env.createFunction(bufferDrawEditorView, null));
     try exports.setNamedProperty("resizeRenderer", try env.createFunction(resizeRenderer, null));
     try exports.setNamedProperty("setCursorPosition", try env.createFunction(setCursorPosition, null));
     try exports.setNamedProperty("setCursorStyle", try env.createFunction(setCursorStyle, null));
