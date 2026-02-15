@@ -211,6 +211,34 @@ fn visualCursorToValue(env: napi.Env, cursor: lib.ExternalVisualCursor) !napi.Va
     return out;
 }
 
+fn terminalCapabilitiesToValue(env: napi.Env, caps: lib.ExternalCapabilities) !napi.Value {
+    const out = try env.createObject();
+    try out.setNamedProperty("kitty_keyboard", try env.getBoolean(caps.kitty_keyboard));
+    try out.setNamedProperty("kitty_graphics", try env.getBoolean(caps.kitty_graphics));
+    try out.setNamedProperty("rgb", try env.getBoolean(caps.rgb));
+    try out.setNamedProperty("unicode", try napi.Value.createFrom(u32, env, caps.unicode));
+    try out.setNamedProperty("sgr_pixels", try env.getBoolean(caps.sgr_pixels));
+    try out.setNamedProperty("color_scheme_updates", try env.getBoolean(caps.color_scheme_updates));
+    try out.setNamedProperty("explicit_width", try env.getBoolean(caps.explicit_width));
+    try out.setNamedProperty("scaled_text", try env.getBoolean(caps.scaled_text));
+    try out.setNamedProperty("sixel", try env.getBoolean(caps.sixel));
+    try out.setNamedProperty("focus_tracking", try env.getBoolean(caps.focus_tracking));
+    try out.setNamedProperty("sync", try env.getBoolean(caps.sync));
+    try out.setNamedProperty("bracketed_paste", try env.getBoolean(caps.bracketed_paste));
+    try out.setNamedProperty("hyperlinks", try env.getBoolean(caps.hyperlinks));
+    try out.setNamedProperty("osc52", try env.getBoolean(caps.osc52));
+    try out.setNamedProperty("explicit_cursor_positioning", try env.getBoolean(caps.explicit_cursor_positioning));
+
+    const term = try env.createObject();
+    const name = caps.term_name_ptr[0..caps.term_name_len];
+    const version = caps.term_version_ptr[0..caps.term_version_len];
+    try term.setNamedProperty("name", try env.createString(.utf8, name));
+    try term.setNamedProperty("version", try env.createString(.utf8, version));
+    try term.setNamedProperty("from_xtversion", try env.getBoolean(caps.term_from_xtversion));
+    try out.setNamedProperty("terminal", term);
+    return out;
+}
+
 fn parseHighlightFromValue(val: napi.Value) !lib.ExternalHighlight {
     var out: lib.ExternalHighlight = .{ .start = 0, .end = 0, .style_id = 0, .priority = 0, .hl_ref = 0 };
 
@@ -2134,6 +2162,104 @@ fn editorViewSetTabIndicatorColor(env: napi.Env, view_ptr_val: napi.Value, color
     return try env.getNull();
 }
 
+fn getArenaAllocatedBytes(env: napi.Env) !napi.Value {
+    const bytes = lib.getArenaAllocatedBytes();
+    return napi.Value.createFrom(f64, env, @floatFromInt(bytes));
+}
+
+fn createSyntaxStyle(env: napi.Env) !napi.Value {
+    return optionalPtrToValue(env, lib.createSyntaxStyle());
+}
+
+fn destroySyntaxStyle(env: napi.Env, style_ptr_val: napi.Value) !napi.Value {
+    const style_ptr = try valueToPtr(*SyntaxStyle, style_ptr_val);
+    lib.destroySyntaxStyle(style_ptr);
+    return try env.getNull();
+}
+
+fn syntaxStyleRegister(env: napi.Env, style_ptr_val: napi.Value, name_val: napi.Value, fg_val: napi.Value, bg_val: napi.Value, attributes_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const style_ptr = try valueToPtr(*SyntaxStyle, style_ptr_val);
+    const name = try extractUtf8Alloc(allocator, name_val);
+    defer allocator.free(name);
+    const fg_opt = try optionalRgbaFromValue(fg_val);
+    const bg_opt = try optionalRgbaFromValue(bg_val);
+    var fg_storage: RGBA = undefined;
+    var bg_storage: RGBA = undefined;
+    const fg_ptr: ?[*]const f32 = if (fg_opt) |fg| blk: {
+        fg_storage = fg;
+        break :blk @as([*]const f32, @ptrCast(&fg_storage));
+    } else null;
+    const bg_ptr: ?[*]const f32 = if (bg_opt) |bg| blk: {
+        bg_storage = bg;
+        break :blk @as([*]const f32, @ptrCast(&bg_storage));
+    } else null;
+    const id = lib.syntaxStyleRegister(style_ptr, name.ptr, name.len, fg_ptr, bg_ptr, try extractU32(attributes_val));
+    return napi.Value.createFrom(u32, env, id);
+}
+
+fn syntaxStyleResolveByName(env: napi.Env, style_ptr_val: napi.Value, name_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const style_ptr = try valueToPtr(*SyntaxStyle, style_ptr_val);
+    const name = try extractUtf8Alloc(allocator, name_val);
+    defer allocator.free(name);
+    const id = lib.syntaxStyleResolveByName(style_ptr, name.ptr, name.len);
+    return napi.Value.createFrom(u32, env, id);
+}
+
+fn syntaxStyleGetStyleCount(env: napi.Env, style_ptr_val: napi.Value) !napi.Value {
+    const style_ptr = try valueToPtr(*SyntaxStyle, style_ptr_val);
+    return napi.Value.createFrom(f64, env, @floatFromInt(lib.syntaxStyleGetStyleCount(style_ptr)));
+}
+
+fn getTerminalCapabilities(env: napi.Env, renderer_ptr_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, renderer_ptr_val);
+    var caps: lib.ExternalCapabilities = undefined;
+    lib.getTerminalCapabilities(renderer_ptr, &caps);
+    return terminalCapabilitiesToValue(env, caps);
+}
+
+fn processCapabilityResponse(env: napi.Env, renderer_ptr_val: napi.Value, response_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const renderer_ptr = try valueToPtr(*CliRenderer, renderer_ptr_val);
+    const response = try extractUtf8Alloc(allocator, response_val);
+    defer allocator.free(response);
+    lib.processCapabilityResponse(renderer_ptr, response.ptr, response.len);
+    return try env.getNull();
+}
+
+fn encodeUnicode(env: napi.Env, text_val: napi.Value, width_method_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const text = try extractUtf8Alloc(allocator, text_val);
+    defer allocator.free(text);
+
+    var out_ptr: [*]lib.EncodedChar = undefined;
+    var out_len: usize = 0;
+    const ok = lib.encodeUnicode(text.ptr, text.len, &out_ptr, &out_len, try extractU8(width_method_val));
+    if (!ok) return try env.getNull();
+
+    const out = try env.createObject();
+    try out.setNamedProperty("ptr", try ptrToValue(env, out_ptr));
+    const data = try napi.Value.createArray(env, out_len);
+    for (0..out_len) |i| {
+        const item = try env.createObject();
+        try item.setNamedProperty("width", try napi.Value.createFrom(u32, env, out_ptr[i].width));
+        try item.setNamedProperty("char", try napi.Value.createFrom(u32, env, out_ptr[i].char));
+        try data.setElement(@intCast(i), item);
+    }
+    try out.setNamedProperty("data", data);
+    return out;
+}
+
+fn freeUnicode(env: napi.Env, encoded_val: napi.Value) !napi.Value {
+    const ptr_val = try encoded_val.getNamedProperty("ptr");
+    const data_val = try encoded_val.getNamedProperty("data");
+    const encoded_ptr = try valueToPtr([*]const lib.EncodedChar, ptr_val);
+    const encoded_len: usize = @intCast(try data_val.getArrayLength());
+    lib.freeUnicode(encoded_ptr, encoded_len);
+    return try env.getNull();
+}
+
 fn init(env: napi.Env, exports: napi.Value) !napi.Value {
     try exports.setNamedProperty("setLogCallback", try env.createFunction(setLogCallback, null));
     try exports.setNamedProperty("setEventCallback", try env.createFunction(setEventCallback, null));
@@ -2344,6 +2470,16 @@ fn init(env: napi.Env, exports: napi.Value) !napi.Value {
     try exports.setNamedProperty("queryPixelResolution", try env.createFunction(queryPixelResolution, null));
     try exports.setNamedProperty("writeOut", try env.createFunction(writeOut, null));
     try exports.setNamedProperty("bufferDrawChar", try env.createFunction(bufferDrawChar, null));
+    try exports.setNamedProperty("getArenaAllocatedBytes", try env.createFunction(getArenaAllocatedBytes, null));
+    try exports.setNamedProperty("createSyntaxStyle", try env.createFunction(createSyntaxStyle, null));
+    try exports.setNamedProperty("destroySyntaxStyle", try env.createFunction(destroySyntaxStyle, null));
+    try exports.setNamedProperty("syntaxStyleRegister", try env.createFunction(syntaxStyleRegister, null));
+    try exports.setNamedProperty("syntaxStyleResolveByName", try env.createFunction(syntaxStyleResolveByName, null));
+    try exports.setNamedProperty("syntaxStyleGetStyleCount", try env.createFunction(syntaxStyleGetStyleCount, null));
+    try exports.setNamedProperty("getTerminalCapabilities", try env.createFunction(getTerminalCapabilities, null));
+    try exports.setNamedProperty("processCapabilityResponse", try env.createFunction(processCapabilityResponse, null));
+    try exports.setNamedProperty("encodeUnicode", try env.createFunction(encodeUnicode, null));
+    try exports.setNamedProperty("freeUnicode", try env.createFunction(freeUnicode, null));
 
     return exports;
 }

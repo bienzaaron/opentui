@@ -466,6 +466,26 @@ interface NapiSymbols {
   ) => void
   editorViewSetTabIndicator: (view: Pointer, indicator: number) => void
   editorViewSetTabIndicatorColor: (view: Pointer, color: Float32Array) => void
+
+  getArenaAllocatedBytes: () => number
+  createSyntaxStyle: () => Pointer | null
+  destroySyntaxStyle: (style: Pointer) => void
+  syntaxStyleRegister: (
+    style: Pointer,
+    name: string,
+    fg: Float32Array | null,
+    bg: Float32Array | null,
+    attributes: number,
+  ) => number
+  syntaxStyleResolveByName: (style: Pointer, name: string) => number
+  syntaxStyleGetStyleCount: (style: Pointer) => number
+  getTerminalCapabilities: (renderer: Pointer) => any
+  processCapabilityResponse: (renderer: Pointer, response: string) => void
+  encodeUnicode: (
+    text: string,
+    widthMethod: number,
+  ) => { ptr: Pointer; data: Array<{ width: number; char: number }> } | null
+  freeUnicode: (encoded: { ptr: Pointer; data: Array<{ width: number; char: number }> }) => void
 }
 
 const REQUIRED_SYMBOLS = [
@@ -677,6 +697,16 @@ const REQUIRED_SYMBOLS = [
   "editorViewSetPlaceholderStyledText",
   "editorViewSetTabIndicator",
   "editorViewSetTabIndicatorColor",
+  "getArenaAllocatedBytes",
+  "createSyntaxStyle",
+  "destroySyntaxStyle",
+  "syntaxStyleRegister",
+  "syntaxStyleResolveByName",
+  "syntaxStyleGetStyleCount",
+  "getTerminalCapabilities",
+  "processCapabilityResponse",
+  "encodeUnicode",
+  "freeUnicode",
 ] as const
 
 function assertSymbols(raw: unknown): asserts raw is NapiSymbols {
@@ -1929,17 +1959,50 @@ export class NapiRenderLib implements RenderLib {
   public editorViewSetTabIndicatorColor(view: Pointer, color: RGBA): void {
     this.opentui.symbols.editorViewSetTabIndicatorColor(view, color.buffer)
   }
-  getArenaAllocatedBytes!: () => number
-  createSyntaxStyle!: () => Pointer
-  destroySyntaxStyle!: (style: Pointer) => void
-  syntaxStyleRegister!: (style: Pointer, name: string, fg: RGBA | null, bg: RGBA | null, attributes: number) => number
-  syntaxStyleResolveByName!: (style: Pointer, name: string) => number | null
-  syntaxStyleGetStyleCount!: (style: Pointer) => number
-  getTerminalCapabilities!: (renderer: Pointer) => any
-  processCapabilityResponse!: (renderer: Pointer, response: string) => void
-  encodeUnicode!: (
+  public getArenaAllocatedBytes(): number {
+    return this.opentui.symbols.getArenaAllocatedBytes()
+  }
+  public createSyntaxStyle(): Pointer {
+    const stylePtr = this.opentui.symbols.createSyntaxStyle()
+    if (!stylePtr) throw new Error("Failed to create SyntaxStyle")
+    return stylePtr
+  }
+  public destroySyntaxStyle(style: Pointer): void {
+    this.opentui.symbols.destroySyntaxStyle(style)
+  }
+  public syntaxStyleRegister(
+    style: Pointer,
+    name: string,
+    fg: RGBA | null,
+    bg: RGBA | null,
+    attributes: number,
+  ): number {
+    return this.opentui.symbols.syntaxStyleRegister(style, name, fg?.buffer ?? null, bg?.buffer ?? null, attributes)
+  }
+  public syntaxStyleResolveByName(style: Pointer, name: string): number | null {
+    const id = this.opentui.symbols.syntaxStyleResolveByName(style, name)
+    return id === 0 ? null : id
+  }
+  public syntaxStyleGetStyleCount(style: Pointer): number {
+    return this.opentui.symbols.syntaxStyleGetStyleCount(style)
+  }
+  public getTerminalCapabilities(renderer: Pointer): any {
+    const caps = this.opentui.symbols.getTerminalCapabilities(renderer)
+    return {
+      ...caps,
+      unicode: caps.unicode === 0 ? "wcwidth" : "unicode",
+    }
+  }
+  public processCapabilityResponse(renderer: Pointer, response: string): void {
+    this.opentui.symbols.processCapabilityResponse(renderer, response)
+  }
+  public encodeUnicode(
     text: string,
     widthMethod: WidthMethod,
-  ) => { ptr: Pointer; data: Array<{ width: number; char: number }> } | null
-  freeUnicode!: (encoded: { ptr: Pointer; data: Array<{ width: number; char: number }> }) => void
+  ): { ptr: Pointer; data: Array<{ width: number; char: number }> } | null {
+    return this.opentui.symbols.encodeUnicode(text, widthMethod === "wcwidth" ? 0 : 1)
+  }
+  public freeUnicode(encoded: { ptr: Pointer; data: Array<{ width: number; char: number }> }): void {
+    this.opentui.symbols.freeUnicode(encoded)
+  }
 }
