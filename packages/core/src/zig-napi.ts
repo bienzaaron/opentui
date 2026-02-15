@@ -77,6 +77,34 @@ interface NapiSymbols {
 
   clearTerminal: (renderer: Pointer) => void
   setTerminalTitle: (renderer: Pointer, title: string) => void
+  copyToClipboardOSC52: (renderer: Pointer, target: number, payload: Uint8Array) => boolean
+  clearClipboardOSC52: (renderer: Pointer, target: number) => boolean
+
+  addToHitGrid: (renderer: Pointer, x: number, y: number, width: number, height: number, id: number) => void
+  clearCurrentHitGrid: (renderer: Pointer) => void
+  hitGridPushScissorRect: (renderer: Pointer, x: number, y: number, width: number, height: number) => void
+  hitGridPopScissorRect: (renderer: Pointer) => void
+  hitGridClearScissorRects: (renderer: Pointer) => void
+  addToCurrentHitGridClipped: (
+    renderer: Pointer,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    id: number,
+  ) => void
+  checkHit: (renderer: Pointer, x: number, y: number) => number
+  getHitGridDirty: (renderer: Pointer) => boolean
+  dumpHitGrid: (renderer: Pointer) => void
+  dumpBuffers: (renderer: Pointer, timestamp: number) => void
+  dumpStdoutBuffer: (renderer: Pointer, timestamp: number) => void
+  enableMouse: (renderer: Pointer, enableMovement: boolean) => void
+  disableMouse: (renderer: Pointer) => void
+  enableKittyKeyboard: (renderer: Pointer, flags: number) => void
+  disableKittyKeyboard: (renderer: Pointer) => void
+  setKittyKeyboardFlags: (renderer: Pointer, flags: number) => void
+  getKittyKeyboardFlags: (renderer: Pointer) => number
+
   setupTerminal: (renderer: Pointer, useAlternateScreen: boolean) => void
   suspendRenderer: (renderer: Pointer) => void
   resumeRenderer: (renderer: Pointer) => void
@@ -117,6 +145,25 @@ const REQUIRED_SYMBOLS = [
   "setDebugOverlay",
   "clearTerminal",
   "setTerminalTitle",
+  "copyToClipboardOSC52",
+  "clearClipboardOSC52",
+  "addToHitGrid",
+  "clearCurrentHitGrid",
+  "hitGridPushScissorRect",
+  "hitGridPopScissorRect",
+  "hitGridClearScissorRects",
+  "addToCurrentHitGridClipped",
+  "checkHit",
+  "getHitGridDirty",
+  "dumpHitGrid",
+  "dumpBuffers",
+  "dumpStdoutBuffer",
+  "enableMouse",
+  "disableMouse",
+  "enableKittyKeyboard",
+  "disableKittyKeyboard",
+  "setKittyKeyboardFlags",
+  "getKittyKeyboardFlags",
   "setupTerminal",
   "suspendRenderer",
   "resumeRenderer",
@@ -316,6 +363,91 @@ export class NapiRenderLib implements RenderLib {
     this.opentui.symbols.setTerminalTitle(renderer, title)
   }
 
+  public copyToClipboardOSC52(renderer: Pointer, target: number, payload: Uint8Array): boolean {
+    return this.opentui.symbols.copyToClipboardOSC52(renderer, target, payload)
+  }
+
+  public clearClipboardOSC52(renderer: Pointer, target: number): boolean {
+    return this.opentui.symbols.clearClipboardOSC52(renderer, target)
+  }
+
+  public addToHitGrid(renderer: Pointer, x: number, y: number, width: number, height: number, id: number): void {
+    this.opentui.symbols.addToHitGrid(renderer, x, y, width, height, id)
+  }
+
+  public clearCurrentHitGrid(renderer: Pointer): void {
+    this.opentui.symbols.clearCurrentHitGrid(renderer)
+  }
+
+  public hitGridPushScissorRect(renderer: Pointer, x: number, y: number, width: number, height: number): void {
+    this.opentui.symbols.hitGridPushScissorRect(renderer, x, y, width, height)
+  }
+
+  public hitGridPopScissorRect(renderer: Pointer): void {
+    this.opentui.symbols.hitGridPopScissorRect(renderer)
+  }
+
+  public hitGridClearScissorRects(renderer: Pointer): void {
+    this.opentui.symbols.hitGridClearScissorRects(renderer)
+  }
+
+  public addToCurrentHitGridClipped(
+    renderer: Pointer,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    id: number,
+  ): void {
+    this.opentui.symbols.addToCurrentHitGridClipped(renderer, x, y, width, height, id)
+  }
+
+  public checkHit(renderer: Pointer, x: number, y: number): number {
+    return this.opentui.symbols.checkHit(renderer, x, y)
+  }
+
+  public getHitGridDirty(renderer: Pointer): boolean {
+    return this.opentui.symbols.getHitGridDirty(renderer)
+  }
+
+  public dumpHitGrid(renderer: Pointer): void {
+    this.opentui.symbols.dumpHitGrid(renderer)
+  }
+
+  public dumpBuffers(renderer: Pointer, timestamp?: number): void {
+    const ts = timestamp ?? Date.now()
+    this.opentui.symbols.dumpBuffers(renderer, ts)
+  }
+
+  public dumpStdoutBuffer(renderer: Pointer, timestamp?: number): void {
+    const ts = timestamp ?? Date.now()
+    this.opentui.symbols.dumpStdoutBuffer(renderer, ts)
+  }
+
+  public enableMouse(renderer: Pointer, enableMovement: boolean): void {
+    this.opentui.symbols.enableMouse(renderer, enableMovement)
+  }
+
+  public disableMouse(renderer: Pointer): void {
+    this.opentui.symbols.disableMouse(renderer)
+  }
+
+  public enableKittyKeyboard(renderer: Pointer, flags: number): void {
+    this.opentui.symbols.enableKittyKeyboard(renderer, flags)
+  }
+
+  public disableKittyKeyboard(renderer: Pointer): void {
+    this.opentui.symbols.disableKittyKeyboard(renderer)
+  }
+
+  public setKittyKeyboardFlags(renderer: Pointer, flags: number): void {
+    this.opentui.symbols.setKittyKeyboardFlags(renderer, flags)
+  }
+
+  public getKittyKeyboardFlags(renderer: Pointer): number {
+    return this.opentui.symbols.getKittyKeyboardFlags(renderer)
+  }
+
   public setupTerminal(renderer: Pointer, useAlternateScreen: boolean): void {
     this.opentui.symbols.setupTerminal(renderer, useAlternateScreen)
   }
@@ -472,32 +604,6 @@ export class NapiRenderLib implements RenderLib {
     title: string | null,
   ) => void
   bufferResize!: (buffer: Pointer, width: number, height: number) => void
-  copyToClipboardOSC52!: (renderer: Pointer, target: number, payload: Uint8Array) => boolean
-  clearClipboardOSC52!: (renderer: Pointer, target: number) => boolean
-  addToHitGrid!: (renderer: Pointer, x: number, y: number, width: number, height: number, id: number) => void
-  clearCurrentHitGrid!: (renderer: Pointer) => void
-  hitGridPushScissorRect!: (renderer: Pointer, x: number, y: number, width: number, height: number) => void
-  hitGridPopScissorRect!: (renderer: Pointer) => void
-  hitGridClearScissorRects!: (renderer: Pointer) => void
-  addToCurrentHitGridClipped!: (
-    renderer: Pointer,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    id: number,
-  ) => void
-  checkHit!: (renderer: Pointer, x: number, y: number) => number
-  getHitGridDirty!: (renderer: Pointer) => boolean
-  dumpHitGrid!: (renderer: Pointer) => void
-  dumpBuffers!: (renderer: Pointer, timestamp?: number) => void
-  dumpStdoutBuffer!: (renderer: Pointer, timestamp?: number) => void
-  enableMouse!: (renderer: Pointer, enableMovement: boolean) => void
-  disableMouse!: (renderer: Pointer) => void
-  enableKittyKeyboard!: (renderer: Pointer, flags: number) => void
-  disableKittyKeyboard!: (renderer: Pointer) => void
-  setKittyKeyboardFlags!: (renderer: Pointer, flags: number) => void
-  getKittyKeyboardFlags!: (renderer: Pointer) => number
   createTextBuffer!: (widthMethod: WidthMethod) => TextBuffer
   destroyTextBuffer!: (buffer: Pointer) => void
   textBufferGetLength!: (buffer: Pointer) => number

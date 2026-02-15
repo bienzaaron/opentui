@@ -355,6 +355,147 @@ fn setTerminalTitle(env: napi.Env, ptr_val: napi.Value, title_val: napi.Value) !
     return try env.getNull();
 }
 
+fn copyToClipboardOSC52(env: napi.Env, ptr_val: napi.Value, target_val: napi.Value, payload_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    const target = try extractU8(target_val);
+    const payload = try extractBytesAlloc(allocator, payload_val);
+    defer allocator.free(payload);
+
+    const success = lib.copyToClipboardOSC52(renderer_ptr, target, payload.ptr, payload.len);
+    return try env.getBoolean(success);
+}
+
+fn clearClipboardOSC52(env: napi.Env, ptr_val: napi.Value, target_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    const target = try extractU8(target_val);
+    const success = lib.clearClipboardOSC52(renderer_ptr, target);
+    return try env.getBoolean(success);
+}
+
+fn addToHitGrid(env: napi.Env, ptr_val: napi.Value, x_val: napi.Value, y_val: napi.Value, width_val: napi.Value, height_val: napi.Value, id_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    const x = try extractI32(x_val);
+    const y = try extractI32(y_val);
+    const width = try extractU32(width_val);
+    const height = try extractU32(height_val);
+    const id = try extractU32(id_val);
+    lib.addToHitGrid(renderer_ptr, x, y, width, height, id);
+    return try env.getNull();
+}
+
+fn clearCurrentHitGrid(env: napi.Env, ptr_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    lib.clearCurrentHitGrid(renderer_ptr);
+    return try env.getNull();
+}
+
+fn hitGridPushScissorRect(env: napi.Env, ptr_val: napi.Value, x_val: napi.Value, y_val: napi.Value, width_val: napi.Value, height_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    const x = try extractI32(x_val);
+    const y = try extractI32(y_val);
+    const width = try extractU32(width_val);
+    const height = try extractU32(height_val);
+    lib.hitGridPushScissorRect(renderer_ptr, x, y, width, height);
+    return try env.getNull();
+}
+
+fn hitGridPopScissorRect(env: napi.Env, ptr_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    lib.hitGridPopScissorRect(renderer_ptr);
+    return try env.getNull();
+}
+
+fn hitGridClearScissorRects(env: napi.Env, ptr_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    lib.hitGridClearScissorRects(renderer_ptr);
+    return try env.getNull();
+}
+
+fn addToCurrentHitGridClipped(env: napi.Env, ptr_val: napi.Value, x_val: napi.Value, y_val: napi.Value, width_val: napi.Value, height_val: napi.Value, id_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    const x = try extractI32(x_val);
+    const y = try extractI32(y_val);
+    const width = try extractU32(width_val);
+    const height = try extractU32(height_val);
+    const id = try extractU32(id_val);
+    lib.addToCurrentHitGridClipped(renderer_ptr, x, y, width, height, id);
+    return try env.getNull();
+}
+
+fn checkHit(env: napi.Env, ptr_val: napi.Value, x_val: napi.Value, y_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    const x = try extractU32(x_val);
+    const y = try extractU32(y_val);
+    const id = lib.checkHit(renderer_ptr, x, y);
+    return napi.Value.createFrom(u32, env, id);
+}
+
+fn getHitGridDirty(env: napi.Env, ptr_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    const dirty = lib.getHitGridDirty(renderer_ptr);
+    return try env.getBoolean(dirty);
+}
+
+fn dumpHitGrid(env: napi.Env, ptr_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    lib.dumpHitGrid(renderer_ptr);
+    return try env.getNull();
+}
+
+fn dumpBuffers(env: napi.Env, ptr_val: napi.Value, timestamp_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    const timestamp = try extractI64(timestamp_val);
+    lib.dumpBuffers(renderer_ptr, timestamp);
+    return try env.getNull();
+}
+
+fn dumpStdoutBuffer(env: napi.Env, ptr_val: napi.Value, timestamp_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    const timestamp = try extractI64(timestamp_val);
+    lib.dumpStdoutBuffer(renderer_ptr, timestamp);
+    return try env.getNull();
+}
+
+fn enableMouse(env: napi.Env, ptr_val: napi.Value, enable_movement_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    const enable_movement = try extractBool(enable_movement_val);
+    lib.enableMouse(renderer_ptr, enable_movement);
+    return try env.getNull();
+}
+
+fn disableMouse(env: napi.Env, ptr_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    lib.disableMouse(renderer_ptr);
+    return try env.getNull();
+}
+
+fn enableKittyKeyboard(env: napi.Env, ptr_val: napi.Value, flags_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    const flags = try extractU8(flags_val);
+    lib.enableKittyKeyboard(renderer_ptr, flags);
+    return try env.getNull();
+}
+
+fn disableKittyKeyboard(env: napi.Env, ptr_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    lib.disableKittyKeyboard(renderer_ptr);
+    return try env.getNull();
+}
+
+fn setKittyKeyboardFlags(env: napi.Env, ptr_val: napi.Value, flags_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    const flags = try extractU8(flags_val);
+    lib.setKittyKeyboardFlags(renderer_ptr, flags);
+    return try env.getNull();
+}
+
+fn getKittyKeyboardFlags(env: napi.Env, ptr_val: napi.Value) !napi.Value {
+    const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
+    const flags = lib.getKittyKeyboardFlags(renderer_ptr);
+    return napi.Value.createFrom(u32, env, flags);
+}
+
 fn setupTerminal(env: napi.Env, ptr_val: napi.Value, use_alt_screen_val: napi.Value) !napi.Value {
     const renderer_ptr = try valueToPtr(*CliRenderer, ptr_val);
     const use_alt_screen = try extractBool(use_alt_screen_val);
@@ -426,6 +567,25 @@ fn init(env: napi.Env, exports: napi.Value) !napi.Value {
     try exports.setNamedProperty("setDebugOverlay", try env.createFunction(setDebugOverlay, null));
     try exports.setNamedProperty("clearTerminal", try env.createFunction(clearTerminal, null));
     try exports.setNamedProperty("setTerminalTitle", try env.createFunction(setTerminalTitle, null));
+    try exports.setNamedProperty("copyToClipboardOSC52", try env.createFunction(copyToClipboardOSC52, null));
+    try exports.setNamedProperty("clearClipboardOSC52", try env.createFunction(clearClipboardOSC52, null));
+    try exports.setNamedProperty("addToHitGrid", try env.createFunction(addToHitGrid, null));
+    try exports.setNamedProperty("clearCurrentHitGrid", try env.createFunction(clearCurrentHitGrid, null));
+    try exports.setNamedProperty("hitGridPushScissorRect", try env.createFunction(hitGridPushScissorRect, null));
+    try exports.setNamedProperty("hitGridPopScissorRect", try env.createFunction(hitGridPopScissorRect, null));
+    try exports.setNamedProperty("hitGridClearScissorRects", try env.createFunction(hitGridClearScissorRects, null));
+    try exports.setNamedProperty("addToCurrentHitGridClipped", try env.createFunction(addToCurrentHitGridClipped, null));
+    try exports.setNamedProperty("checkHit", try env.createFunction(checkHit, null));
+    try exports.setNamedProperty("getHitGridDirty", try env.createFunction(getHitGridDirty, null));
+    try exports.setNamedProperty("dumpHitGrid", try env.createFunction(dumpHitGrid, null));
+    try exports.setNamedProperty("dumpBuffers", try env.createFunction(dumpBuffers, null));
+    try exports.setNamedProperty("dumpStdoutBuffer", try env.createFunction(dumpStdoutBuffer, null));
+    try exports.setNamedProperty("enableMouse", try env.createFunction(enableMouse, null));
+    try exports.setNamedProperty("disableMouse", try env.createFunction(disableMouse, null));
+    try exports.setNamedProperty("enableKittyKeyboard", try env.createFunction(enableKittyKeyboard, null));
+    try exports.setNamedProperty("disableKittyKeyboard", try env.createFunction(disableKittyKeyboard, null));
+    try exports.setNamedProperty("setKittyKeyboardFlags", try env.createFunction(setKittyKeyboardFlags, null));
+    try exports.setNamedProperty("getKittyKeyboardFlags", try env.createFunction(getKittyKeyboardFlags, null));
     try exports.setNamedProperty("setupTerminal", try env.createFunction(setupTerminal, null));
     try exports.setNamedProperty("suspendRenderer", try env.createFunction(suspendRenderer, null));
     try exports.setNamedProperty("resumeRenderer", try env.createFunction(resumeRenderer, null));
