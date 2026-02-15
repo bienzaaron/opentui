@@ -5,8 +5,11 @@ const lib = @import("lib");
 const CliRenderer = lib.CliRenderer;
 const OptimizedBuffer = lib.OptimizedBuffer;
 const RGBA = lib.RGBA;
+const TextBuffer = lib.TextBuffer;
 const TextBufferView = lib.TextBufferView;
 const EditorView = lib.EditorView;
+const StyledChunk = lib.StyledChunk;
+const SyntaxStyle = lib.SyntaxStyle;
 
 var callback_env: ?napi.Env = null;
 var log_callback: ?napi.Value = null;
@@ -85,8 +88,7 @@ fn extractBool(val: napi.Value) !bool {
 }
 
 fn extractUtf8Alloc(allocator: std.mem.Allocator, val: napi.Value) ![]u8 {
-    var empty: [0]u8 = .{};
-    const required_len = try val.getValueString(.utf8, empty[0..]);
+    const required_len = try val.getValueString(.utf8, null) + 1;
     var bytes = try allocator.alloc(u8, required_len);
     const actual_len = try val.getValueString(.utf8, bytes);
     return bytes[0..actual_len];
@@ -163,6 +165,63 @@ fn cursorStateToValue(env: napi.Env, state: lib.ExternalCursorState) !napi.Value
     try obj.setNamedProperty("b", try napi.Value.createFrom(f64, env, state.b));
     try obj.setNamedProperty("a", try napi.Value.createFrom(f64, env, state.a));
     return obj;
+}
+
+fn u32SliceToArray(env: napi.Env, values: []const u32) !napi.Value {
+    const out = try napi.Value.createArray(env, values.len);
+    for (values, 0..) |value, i| {
+        try out.setElement(@intCast(i), try napi.Value.createFrom(u32, env, value));
+    }
+    return out;
+}
+
+fn lineInfoToValue(env: napi.Env, info: lib.ExternalLineInfo) !napi.Value {
+    const out = try env.createObject();
+    try out.setNamedProperty("lineStarts", try u32SliceToArray(env, info.starts_ptr[0..info.starts_len]));
+    try out.setNamedProperty("lineWidths", try u32SliceToArray(env, info.widths_ptr[0..info.widths_len]));
+    try out.setNamedProperty("lineSources", try u32SliceToArray(env, info.sources_ptr[0..info.sources_len]));
+    try out.setNamedProperty("lineWraps", try u32SliceToArray(env, info.wraps_ptr[0..info.wraps_len]));
+    try out.setNamedProperty("maxLineWidth", try napi.Value.createFrom(u32, env, info.max_width));
+    return out;
+}
+
+fn measureResultToValue(env: napi.Env, result: lib.ExternalMeasureResult) !napi.Value {
+    const out = try env.createObject();
+    try out.setNamedProperty("lineCount", try napi.Value.createFrom(u32, env, result.line_count));
+    try out.setNamedProperty("maxWidth", try napi.Value.createFrom(u32, env, result.max_width));
+    return out;
+}
+
+fn parseHighlightFromValue(val: napi.Value) !lib.ExternalHighlight {
+    var out: lib.ExternalHighlight = .{ .start = 0, .end = 0, .style_id = 0, .priority = 0, .hl_ref = 0 };
+
+    if (try val.hasNamedProperty("start")) {
+        out.start = try (try (try val.getNamedProperty("start")).coerceTo(.Number)).getValue(u32);
+    }
+    if (try val.hasNamedProperty("end")) {
+        out.end = try (try (try val.getNamedProperty("end")).coerceTo(.Number)).getValue(u32);
+    }
+    if (try val.hasNamedProperty("styleId")) {
+        out.style_id = try (try (try val.getNamedProperty("styleId")).coerceTo(.Number)).getValue(u32);
+    }
+    if (try val.hasNamedProperty("priority")) {
+        out.priority = @intCast(try (try (try val.getNamedProperty("priority")).coerceTo(.Number)).getValue(u32));
+    }
+    if (try val.hasNamedProperty("hlRef")) {
+        out.hl_ref = @intCast(try (try (try val.getNamedProperty("hlRef")).coerceTo(.Number)).getValue(u32));
+    }
+
+    return out;
+}
+
+fn highlightToValue(env: napi.Env, hl: lib.ExternalHighlight) !napi.Value {
+    const out = try env.createObject();
+    try out.setNamedProperty("start", try napi.Value.createFrom(u32, env, hl.start));
+    try out.setNamedProperty("end", try napi.Value.createFrom(u32, env, hl.end));
+    try out.setNamedProperty("styleId", try napi.Value.createFrom(u32, env, hl.style_id));
+    try out.setNamedProperty("priority", try napi.Value.createFrom(u32, env, hl.priority));
+    try out.setNamedProperty("hlRef", try napi.Value.createFrom(u32, env, hl.hl_ref));
+    return out;
 }
 
 fn callLogJs(level: u8, msg: []const u8) void {
@@ -681,16 +740,10 @@ fn bufferDrawText(env: napi.Env, buffer_ptr_val: napi.Value, text_val: napi.Valu
     const x = try extractU32(x_val);
     const y = try extractU32(y_val);
     const fg = try rgbaFromValue(fg_val);
-    const bg_opt = try optionalRgbaFromValue(bg_val);
+    const bg = try rgbaFromValue(bg_val);
     const attributes = try extractU32(attributes_val);
 
-    var bg_color: RGBA = undefined;
-    const bg_ptr: ?[*]const f32 = if (bg_opt) |bg| blk: {
-        bg_color = bg;
-        break :blk @as([*]const f32, @ptrCast(&bg_color));
-    } else null;
-
-    lib.bufferDrawText(buffer_ptr, text.ptr, text.len, x, y, @as([*]const f32, @ptrCast(&fg)), bg_ptr, attributes);
+    lib.bufferDrawText(buffer_ptr, text.ptr, text.len, x, y, &fg, &bg, attributes);
     return try env.getNull();
 }
 
@@ -918,6 +971,585 @@ fn bufferDrawEditorView(env: napi.Env, buffer_ptr_val: napi.Value, view_ptr_val:
     return try env.getNull();
 }
 
+fn createTextBuffer(env: napi.Env, width_method_val: napi.Value) !napi.Value {
+    const width_method = try extractU8(width_method_val);
+    return optionalPtrToValue(env, lib.createTextBuffer(width_method));
+}
+
+fn destroyTextBuffer(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    lib.destroyTextBuffer(buffer_ptr);
+    return try env.getNull();
+}
+
+fn textBufferGetLength(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    return napi.Value.createFrom(u32, env, lib.textBufferGetLength(buffer_ptr));
+}
+
+fn textBufferGetByteSize(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    return napi.Value.createFrom(u32, env, lib.textBufferGetByteSize(buffer_ptr));
+}
+
+fn textBufferReset(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    lib.textBufferReset(buffer_ptr);
+    return try env.getNull();
+}
+
+fn textBufferClear(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    lib.textBufferClear(buffer_ptr);
+    return try env.getNull();
+}
+
+fn textBufferSetDefaultFg(env: napi.Env, buffer_ptr_val: napi.Value, fg_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const fg_opt = try optionalRgbaFromValue(fg_val);
+    var fg_storage: RGBA = undefined;
+    const fg_ptr: ?[*]const f32 = if (fg_opt) |fg| blk: {
+        fg_storage = fg;
+        break :blk @as([*]const f32, @ptrCast(&fg_storage));
+    } else null;
+    lib.textBufferSetDefaultFg(buffer_ptr, fg_ptr);
+    return try env.getNull();
+}
+
+fn textBufferSetDefaultBg(env: napi.Env, buffer_ptr_val: napi.Value, bg_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const bg_opt = try optionalRgbaFromValue(bg_val);
+    var bg_storage: RGBA = undefined;
+    const bg_ptr: ?[*]const f32 = if (bg_opt) |bg| blk: {
+        bg_storage = bg;
+        break :blk @as([*]const f32, @ptrCast(&bg_storage));
+    } else null;
+    lib.textBufferSetDefaultBg(buffer_ptr, bg_ptr);
+    return try env.getNull();
+}
+
+fn textBufferSetDefaultAttributes(env: napi.Env, buffer_ptr_val: napi.Value, attr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const attr_type = try attr_val.typeOf();
+    var attr_storage: u32 = 0;
+    const attr_ptr: ?[*]const u32 = if (attr_type == .Null or attr_type == .Undefined) null else blk: {
+        attr_storage = try (try attr_val.coerceTo(.Number)).getValue(u32);
+        break :blk @as([*]const u32, @ptrCast(&attr_storage));
+    };
+    lib.textBufferSetDefaultAttributes(buffer_ptr, attr_ptr);
+    return try env.getNull();
+}
+
+fn textBufferResetDefaults(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    lib.textBufferResetDefaults(buffer_ptr);
+    return try env.getNull();
+}
+
+fn textBufferGetTabWidth(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    return napi.Value.createFrom(u32, env, lib.textBufferGetTabWidth(buffer_ptr));
+}
+
+fn textBufferSetTabWidth(env: napi.Env, buffer_ptr_val: napi.Value, width_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const width = try extractU8(width_val);
+    lib.textBufferSetTabWidth(buffer_ptr, width);
+    return try env.getNull();
+}
+
+fn textBufferRegisterMemBuffer(env: napi.Env, buffer_ptr_val: napi.Value, bytes_val: napi.Value, owned_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const bytes = try extractBytesAlloc(allocator, bytes_val);
+    defer allocator.free(bytes);
+    const owned = try extractBool(owned_val);
+    const id = lib.textBufferRegisterMemBuffer(buffer_ptr, bytes.ptr, bytes.len, owned);
+    return napi.Value.createFrom(u32, env, id);
+}
+
+fn textBufferReplaceMemBuffer(env: napi.Env, buffer_ptr_val: napi.Value, mem_id_val: napi.Value, bytes_val: napi.Value, owned_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const mem_id = try extractU8(mem_id_val);
+    const bytes = try extractBytesAlloc(allocator, bytes_val);
+    defer allocator.free(bytes);
+    const owned = try extractBool(owned_val);
+    const ok = lib.textBufferReplaceMemBuffer(buffer_ptr, mem_id, bytes.ptr, bytes.len, owned);
+    return try env.getBoolean(ok);
+}
+
+fn textBufferClearMemRegistry(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    lib.textBufferClearMemRegistry(buffer_ptr);
+    return try env.getNull();
+}
+
+fn textBufferSetTextFromMem(env: napi.Env, buffer_ptr_val: napi.Value, mem_id_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const mem_id = try extractU8(mem_id_val);
+    lib.textBufferSetTextFromMem(buffer_ptr, mem_id);
+    return try env.getNull();
+}
+
+fn textBufferAppend(env: napi.Env, buffer_ptr_val: napi.Value, bytes_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const bytes = try extractBytesAlloc(allocator, bytes_val);
+    defer allocator.free(bytes);
+    lib.textBufferAppend(buffer_ptr, bytes.ptr, bytes.len);
+    return try env.getNull();
+}
+
+fn textBufferAppendFromMemId(env: napi.Env, buffer_ptr_val: napi.Value, mem_id_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const mem_id = try extractU8(mem_id_val);
+    lib.textBufferAppendFromMemId(buffer_ptr, mem_id);
+    return try env.getNull();
+}
+
+fn textBufferLoadFile(env: napi.Env, buffer_ptr_val: napi.Value, path_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const path = try extractUtf8Alloc(allocator, path_val);
+    defer allocator.free(path);
+    const ok = lib.textBufferLoadFile(buffer_ptr, path.ptr, path.len);
+    return try env.getBoolean(ok);
+}
+
+fn textBufferSetStyledText(env: napi.Env, buffer_ptr_val: napi.Value, chunks_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const chunk_count: usize = @intCast(try chunks_val.getArrayLength());
+
+    if (chunk_count == 0) {
+        lib.textBufferClear(buffer_ptr);
+        return try env.getNull();
+    }
+
+    const chunks = try allocator.alloc(StyledChunk, chunk_count);
+    defer allocator.free(chunks);
+
+    const fg_storage = try allocator.alloc(RGBA, chunk_count);
+    defer allocator.free(fg_storage);
+    const bg_storage = try allocator.alloc(RGBA, chunk_count);
+    defer allocator.free(bg_storage);
+    const has_fg = try allocator.alloc(bool, chunk_count);
+    defer allocator.free(has_fg);
+    const has_bg = try allocator.alloc(bool, chunk_count);
+    defer allocator.free(has_bg);
+    @memset(has_fg, false);
+    @memset(has_bg, false);
+
+    const text_storage = try allocator.alloc([]u8, chunk_count);
+    var text_storage_len: usize = 0;
+    defer {
+        for (0..text_storage_len) |idx| {
+            const item = text_storage[idx];
+            allocator.free(item);
+        }
+        allocator.free(text_storage);
+    }
+
+    for (0..chunk_count) |i| {
+        const chunk_val = try chunks_val.getElement(@intCast(i));
+
+        const text_bytes = try extractUtf8Alloc(allocator, try chunk_val.getNamedProperty("text"));
+        text_storage[text_storage_len] = text_bytes;
+        text_storage_len += 1;
+
+        var attributes: u32 = 0;
+        if (try chunk_val.hasNamedProperty("attributes")) {
+            attributes = try (try (try chunk_val.getNamedProperty("attributes")).coerceTo(.Number)).getValue(u32);
+        }
+
+        if (try chunk_val.hasNamedProperty("link")) {
+            const link_val = try chunk_val.getNamedProperty("link");
+            if (try link_val.hasNamedProperty("url")) {
+                const url_bytes = try extractUtf8Alloc(allocator, try link_val.getNamedProperty("url"));
+                defer allocator.free(url_bytes);
+                const link_id = lib.linkAlloc(url_bytes.ptr, url_bytes.len);
+                attributes = lib.attributesWithLink(attributes, link_id);
+            }
+        }
+
+        if (try chunk_val.hasNamedProperty("fg")) {
+            if (try optionalRgbaFromValue(try chunk_val.getNamedProperty("fg"))) |fg| {
+                fg_storage[i] = fg;
+                has_fg[i] = true;
+            }
+        }
+
+        if (try chunk_val.hasNamedProperty("bg")) {
+            if (try optionalRgbaFromValue(try chunk_val.getNamedProperty("bg"))) |bg| {
+                bg_storage[i] = bg;
+                has_bg[i] = true;
+            }
+        }
+
+        chunks[i] = .{
+            .text_ptr = text_bytes.ptr,
+            .text_len = text_bytes.len,
+            .fg_ptr = if (has_fg[i]) @as([*]const f32, @ptrCast(&fg_storage[i])) else null,
+            .bg_ptr = if (has_bg[i]) @as([*]const f32, @ptrCast(&bg_storage[i])) else null,
+            .attributes = attributes,
+        };
+    }
+
+    lib.textBufferSetStyledText(buffer_ptr, chunks.ptr, chunks.len);
+    return try env.getNull();
+}
+
+fn textBufferGetLineCount(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    return napi.Value.createFrom(u32, env, lib.textBufferGetLineCount(buffer_ptr));
+}
+
+fn textBufferGetPlainTextBytes(env: napi.Env, buffer_ptr_val: napi.Value, max_len_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const max_len: usize = @intCast(try extractU32(max_len_val));
+    const out = try allocator.alloc(u8, max_len);
+    defer allocator.free(out);
+    const actual_len = lib.textBufferGetPlainText(buffer_ptr, out.ptr, out.len);
+    if (actual_len == 0) return try env.getNull();
+    return bytesToArrayBuffer(env, out[0..actual_len]);
+}
+
+fn textBufferGetTextRange(env: napi.Env, buffer_ptr_val: napi.Value, start_offset_val: napi.Value, end_offset_val: napi.Value, max_len_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const start_offset = try extractU32(start_offset_val);
+    const end_offset = try extractU32(end_offset_val);
+    const max_len: usize = @intCast(try extractU32(max_len_val));
+    const out = try allocator.alloc(u8, max_len);
+    defer allocator.free(out);
+    const actual_len = lib.textBufferGetTextRange(buffer_ptr, start_offset, end_offset, out.ptr, out.len);
+    if (actual_len == 0) return try env.getNull();
+    return bytesToArrayBuffer(env, out[0..actual_len]);
+}
+
+fn textBufferGetTextRangeByCoords(env: napi.Env, buffer_ptr_val: napi.Value, start_row_val: napi.Value, start_col_val: napi.Value, end_row_val: napi.Value, end_col_val: napi.Value, max_len_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const start_row = try extractU32(start_row_val);
+    const start_col = try extractU32(start_col_val);
+    const end_row = try extractU32(end_row_val);
+    const end_col = try extractU32(end_col_val);
+    const max_len: usize = @intCast(try extractU32(max_len_val));
+    const out = try allocator.alloc(u8, max_len);
+    defer allocator.free(out);
+    const actual_len = lib.textBufferGetTextRangeByCoords(buffer_ptr, start_row, start_col, end_row, end_col, out.ptr, out.len);
+    if (actual_len == 0) return try env.getNull();
+    return bytesToArrayBuffer(env, out[0..actual_len]);
+}
+
+fn createTextBufferView(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    return optionalPtrToValue(env, lib.createTextBufferView(buffer_ptr));
+}
+
+fn destroyTextBufferView(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    lib.destroyTextBufferView(view_ptr);
+    return try env.getNull();
+}
+
+fn textBufferViewSetSelection(env: napi.Env, view_ptr_val: napi.Value, start_val: napi.Value, end_val: napi.Value, bg_val: napi.Value, fg_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const start = try extractU32(start_val);
+    const end = try extractU32(end_val);
+    const bg_opt = try optionalRgbaFromValue(bg_val);
+    const fg_opt = try optionalRgbaFromValue(fg_val);
+
+    var bg_storage: RGBA = undefined;
+    var fg_storage: RGBA = undefined;
+    const bg_ptr: ?[*]const f32 = if (bg_opt) |bg| blk: {
+        bg_storage = bg;
+        break :blk @as([*]const f32, @ptrCast(&bg_storage));
+    } else null;
+    const fg_ptr: ?[*]const f32 = if (fg_opt) |fg| blk: {
+        fg_storage = fg;
+        break :blk @as([*]const f32, @ptrCast(&fg_storage));
+    } else null;
+
+    lib.textBufferViewSetSelection(view_ptr, start, end, bg_ptr, fg_ptr);
+    return try env.getNull();
+}
+
+fn textBufferViewResetSelection(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    lib.textBufferViewResetSelection(view_ptr);
+    return try env.getNull();
+}
+
+fn textBufferViewGetSelection(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const packed_sel = lib.textBufferViewGetSelectionInfo(view_ptr);
+    if (packed_sel == std.math.maxInt(u64)) {
+        return try env.getNull();
+    }
+
+    const start: u32 = @intCast((packed_sel >> 32) & 0xffff_ffff);
+    const end: u32 = @intCast(packed_sel & 0xffff_ffff);
+
+    const out = try env.createObject();
+    try out.setNamedProperty("start", try napi.Value.createFrom(u32, env, start));
+    try out.setNamedProperty("end", try napi.Value.createFrom(u32, env, end));
+    return out;
+}
+
+fn textBufferViewSetLocalSelection(env: napi.Env, view_ptr_val: napi.Value, anchor_x_val: napi.Value, anchor_y_val: napi.Value, focus_x_val: napi.Value, focus_y_val: napi.Value, bg_val: napi.Value, fg_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const anchor_x = try extractI32(anchor_x_val);
+    const anchor_y = try extractI32(anchor_y_val);
+    const focus_x = try extractI32(focus_x_val);
+    const focus_y = try extractI32(focus_y_val);
+    const bg_opt = try optionalRgbaFromValue(bg_val);
+    const fg_opt = try optionalRgbaFromValue(fg_val);
+
+    var bg_storage: RGBA = undefined;
+    var fg_storage: RGBA = undefined;
+    const bg_ptr: ?[*]const f32 = if (bg_opt) |bg| blk: {
+        bg_storage = bg;
+        break :blk @as([*]const f32, @ptrCast(&bg_storage));
+    } else null;
+    const fg_ptr: ?[*]const f32 = if (fg_opt) |fg| blk: {
+        fg_storage = fg;
+        break :blk @as([*]const f32, @ptrCast(&fg_storage));
+    } else null;
+
+    const changed = lib.textBufferViewSetLocalSelection(view_ptr, anchor_x, anchor_y, focus_x, focus_y, bg_ptr, fg_ptr);
+    return try env.getBoolean(changed);
+}
+
+fn textBufferViewUpdateSelection(env: napi.Env, view_ptr_val: napi.Value, end_val: napi.Value, bg_val: napi.Value, fg_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const end = try extractU32(end_val);
+    const bg_opt = try optionalRgbaFromValue(bg_val);
+    const fg_opt = try optionalRgbaFromValue(fg_val);
+
+    var bg_storage: RGBA = undefined;
+    var fg_storage: RGBA = undefined;
+    const bg_ptr: ?[*]const f32 = if (bg_opt) |bg| blk: {
+        bg_storage = bg;
+        break :blk @as([*]const f32, @ptrCast(&bg_storage));
+    } else null;
+    const fg_ptr: ?[*]const f32 = if (fg_opt) |fg| blk: {
+        fg_storage = fg;
+        break :blk @as([*]const f32, @ptrCast(&fg_storage));
+    } else null;
+
+    lib.textBufferViewUpdateSelection(view_ptr, end, bg_ptr, fg_ptr);
+    return try env.getNull();
+}
+
+fn textBufferViewUpdateLocalSelection(env: napi.Env, view_ptr_val: napi.Value, anchor_x_val: napi.Value, anchor_y_val: napi.Value, focus_x_val: napi.Value, focus_y_val: napi.Value, bg_val: napi.Value, fg_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const anchor_x = try extractI32(anchor_x_val);
+    const anchor_y = try extractI32(anchor_y_val);
+    const focus_x = try extractI32(focus_x_val);
+    const focus_y = try extractI32(focus_y_val);
+    const bg_opt = try optionalRgbaFromValue(bg_val);
+    const fg_opt = try optionalRgbaFromValue(fg_val);
+
+    var bg_storage: RGBA = undefined;
+    var fg_storage: RGBA = undefined;
+    const bg_ptr: ?[*]const f32 = if (bg_opt) |bg| blk: {
+        bg_storage = bg;
+        break :blk @as([*]const f32, @ptrCast(&bg_storage));
+    } else null;
+    const fg_ptr: ?[*]const f32 = if (fg_opt) |fg| blk: {
+        fg_storage = fg;
+        break :blk @as([*]const f32, @ptrCast(&fg_storage));
+    } else null;
+
+    const changed = lib.textBufferViewUpdateLocalSelection(view_ptr, anchor_x, anchor_y, focus_x, focus_y, bg_ptr, fg_ptr);
+    return try env.getBoolean(changed);
+}
+
+fn textBufferViewResetLocalSelection(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    lib.textBufferViewResetLocalSelection(view_ptr);
+    return try env.getNull();
+}
+
+fn textBufferViewSetWrapWidth(env: napi.Env, view_ptr_val: napi.Value, width_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const width = try extractU32(width_val);
+    lib.textBufferViewSetWrapWidth(view_ptr, width);
+    return try env.getNull();
+}
+
+fn textBufferViewSetWrapMode(env: napi.Env, view_ptr_val: napi.Value, mode_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const mode = try extractU8(mode_val);
+    lib.textBufferViewSetWrapMode(view_ptr, mode);
+    return try env.getNull();
+}
+
+fn textBufferViewSetViewportSize(env: napi.Env, view_ptr_val: napi.Value, width_val: napi.Value, height_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const width = try extractU32(width_val);
+    const height = try extractU32(height_val);
+    lib.textBufferViewSetViewportSize(view_ptr, width, height);
+    return try env.getNull();
+}
+
+fn textBufferViewSetViewport(env: napi.Env, view_ptr_val: napi.Value, x_val: napi.Value, y_val: napi.Value, width_val: napi.Value, height_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const x = try extractU32(x_val);
+    const y = try extractU32(y_val);
+    const width = try extractU32(width_val);
+    const height = try extractU32(height_val);
+    lib.textBufferViewSetViewport(view_ptr, x, y, width, height);
+    return try env.getNull();
+}
+
+fn textBufferViewGetVirtualLineCount(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    return napi.Value.createFrom(u32, env, lib.textBufferViewGetVirtualLineCount(view_ptr));
+}
+
+fn textBufferViewGetLineInfo(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    var out: lib.ExternalLineInfo = undefined;
+    lib.textBufferViewGetLineInfoDirect(view_ptr, &out);
+    return lineInfoToValue(env, out);
+}
+
+fn textBufferViewGetLogicalLineInfo(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    var out: lib.ExternalLineInfo = undefined;
+    lib.textBufferViewGetLogicalLineInfoDirect(view_ptr, &out);
+    return lineInfoToValue(env, out);
+}
+
+fn textBufferViewGetSelectedTextBytes(env: napi.Env, view_ptr_val: napi.Value, max_len_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const max_len: usize = @intCast(try extractU32(max_len_val));
+    const out = try allocator.alloc(u8, max_len);
+    defer allocator.free(out);
+    const actual_len = lib.textBufferViewGetSelectedText(view_ptr, out.ptr, out.len);
+    if (actual_len == 0) return try env.getNull();
+    return bytesToArrayBuffer(env, out[0..actual_len]);
+}
+
+fn textBufferViewGetPlainTextBytes(env: napi.Env, view_ptr_val: napi.Value, max_len_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const max_len: usize = @intCast(try extractU32(max_len_val));
+    const out = try allocator.alloc(u8, max_len);
+    defer allocator.free(out);
+    const actual_len = lib.textBufferViewGetPlainText(view_ptr, out.ptr, out.len);
+    if (actual_len == 0) return try env.getNull();
+    return bytesToArrayBuffer(env, out[0..actual_len]);
+}
+
+fn textBufferViewSetTabIndicator(env: napi.Env, view_ptr_val: napi.Value, indicator_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const indicator = try extractU32(indicator_val);
+    lib.textBufferViewSetTabIndicator(view_ptr, indicator);
+    return try env.getNull();
+}
+
+fn textBufferViewSetTabIndicatorColor(env: napi.Env, view_ptr_val: napi.Value, color_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const color = try rgbaFromValue(color_val);
+    lib.textBufferViewSetTabIndicatorColor(view_ptr, @as([*]const f32, @ptrCast(&color)));
+    return try env.getNull();
+}
+
+fn textBufferViewSetTruncate(env: napi.Env, view_ptr_val: napi.Value, truncate_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const truncate = try extractBool(truncate_val);
+    lib.textBufferViewSetTruncate(view_ptr, truncate);
+    return try env.getNull();
+}
+
+fn textBufferViewMeasureForDimensions(env: napi.Env, view_ptr_val: napi.Value, width_val: napi.Value, height_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*TextBufferView, view_ptr_val);
+    const width = try extractU32(width_val);
+    const height = try extractU32(height_val);
+    var out: lib.ExternalMeasureResult = undefined;
+    const ok = lib.textBufferViewMeasureForDimensions(view_ptr, width, height, &out);
+    if (!ok) return try env.getNull();
+    return measureResultToValue(env, out);
+}
+
+fn textBufferAddHighlightByCharRange(env: napi.Env, buffer_ptr_val: napi.Value, highlight_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const highlight = try parseHighlightFromValue(highlight_val);
+    lib.textBufferAddHighlightByCharRange(buffer_ptr, @as([*]const lib.ExternalHighlight, @ptrCast(&highlight)));
+    return try env.getNull();
+}
+
+fn textBufferAddHighlight(env: napi.Env, buffer_ptr_val: napi.Value, line_idx_val: napi.Value, highlight_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const line_idx = try extractU32(line_idx_val);
+    const highlight = try parseHighlightFromValue(highlight_val);
+    lib.textBufferAddHighlight(buffer_ptr, line_idx, @as([*]const lib.ExternalHighlight, @ptrCast(&highlight)));
+    return try env.getNull();
+}
+
+fn textBufferRemoveHighlightsByRef(env: napi.Env, buffer_ptr_val: napi.Value, hl_ref_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const hl_ref: u16 = @intCast(try extractU32(hl_ref_val));
+    lib.textBufferRemoveHighlightsByRef(buffer_ptr, hl_ref);
+    return try env.getNull();
+}
+
+fn textBufferClearLineHighlights(env: napi.Env, buffer_ptr_val: napi.Value, line_idx_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const line_idx = try extractU32(line_idx_val);
+    lib.textBufferClearLineHighlights(buffer_ptr, line_idx);
+    return try env.getNull();
+}
+
+fn textBufferClearAllHighlights(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    lib.textBufferClearAllHighlights(buffer_ptr);
+    return try env.getNull();
+}
+
+fn textBufferSetSyntaxStyle(env: napi.Env, buffer_ptr_val: napi.Value, style_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const style_type = try style_val.typeOf();
+    const style_ptr: ?*SyntaxStyle = if (style_type == .Null or style_type == .Undefined)
+        null
+    else
+        try valueToPtr(*SyntaxStyle, style_val);
+
+    lib.textBufferSetSyntaxStyle(buffer_ptr, style_ptr);
+    return try env.getNull();
+}
+
+fn textBufferGetLineHighlights(env: napi.Env, buffer_ptr_val: napi.Value, line_idx_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    const line_idx = try extractU32(line_idx_val);
+    var count: usize = 0;
+    const native_ptr = lib.textBufferGetLineHighlightsPtr(buffer_ptr, line_idx, &count);
+
+    const result = try napi.Value.createArray(env, count);
+    if (native_ptr == null or count == 0) {
+        return result;
+    }
+
+    defer lib.textBufferFreeLineHighlights(native_ptr.?, count);
+
+    for (0..count) |i| {
+        const hl = native_ptr.?[i];
+        try result.setElement(@intCast(i), try highlightToValue(env, hl));
+    }
+    return result;
+}
+
+fn textBufferGetHighlightCount(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
+    return napi.Value.createFrom(u32, env, lib.textBufferGetHighlightCount(buffer_ptr));
+}
+
 fn init(env: napi.Env, exports: napi.Value) !napi.Value {
     try exports.setNamedProperty("setLogCallback", try env.createFunction(setLogCallback, null));
     try exports.setNamedProperty("setEventCallback", try env.createFunction(setEventCallback, null));
@@ -966,6 +1598,60 @@ fn init(env: napi.Env, exports: napi.Value) !napi.Value {
     try exports.setNamedProperty("bufferClearOpacity", try env.createFunction(bufferClearOpacity, null));
     try exports.setNamedProperty("bufferDrawTextBufferView", try env.createFunction(bufferDrawTextBufferView, null));
     try exports.setNamedProperty("bufferDrawEditorView", try env.createFunction(bufferDrawEditorView, null));
+    try exports.setNamedProperty("createTextBuffer", try env.createFunction(createTextBuffer, null));
+    try exports.setNamedProperty("destroyTextBuffer", try env.createFunction(destroyTextBuffer, null));
+    try exports.setNamedProperty("textBufferGetLength", try env.createFunction(textBufferGetLength, null));
+    try exports.setNamedProperty("textBufferGetByteSize", try env.createFunction(textBufferGetByteSize, null));
+    try exports.setNamedProperty("textBufferReset", try env.createFunction(textBufferReset, null));
+    try exports.setNamedProperty("textBufferClear", try env.createFunction(textBufferClear, null));
+    try exports.setNamedProperty("textBufferSetDefaultFg", try env.createFunction(textBufferSetDefaultFg, null));
+    try exports.setNamedProperty("textBufferSetDefaultBg", try env.createFunction(textBufferSetDefaultBg, null));
+    try exports.setNamedProperty("textBufferSetDefaultAttributes", try env.createFunction(textBufferSetDefaultAttributes, null));
+    try exports.setNamedProperty("textBufferResetDefaults", try env.createFunction(textBufferResetDefaults, null));
+    try exports.setNamedProperty("textBufferGetTabWidth", try env.createFunction(textBufferGetTabWidth, null));
+    try exports.setNamedProperty("textBufferSetTabWidth", try env.createFunction(textBufferSetTabWidth, null));
+    try exports.setNamedProperty("textBufferRegisterMemBuffer", try env.createFunction(textBufferRegisterMemBuffer, null));
+    try exports.setNamedProperty("textBufferReplaceMemBuffer", try env.createFunction(textBufferReplaceMemBuffer, null));
+    try exports.setNamedProperty("textBufferClearMemRegistry", try env.createFunction(textBufferClearMemRegistry, null));
+    try exports.setNamedProperty("textBufferSetTextFromMem", try env.createFunction(textBufferSetTextFromMem, null));
+    try exports.setNamedProperty("textBufferAppend", try env.createFunction(textBufferAppend, null));
+    try exports.setNamedProperty("textBufferAppendFromMemId", try env.createFunction(textBufferAppendFromMemId, null));
+    try exports.setNamedProperty("textBufferLoadFile", try env.createFunction(textBufferLoadFile, null));
+    try exports.setNamedProperty("textBufferSetStyledText", try env.createFunction(textBufferSetStyledText, null));
+    try exports.setNamedProperty("textBufferGetLineCount", try env.createFunction(textBufferGetLineCount, null));
+    try exports.setNamedProperty("textBufferGetPlainTextBytes", try env.createFunction(textBufferGetPlainTextBytes, null));
+    try exports.setNamedProperty("textBufferGetTextRange", try env.createFunction(textBufferGetTextRange, null));
+    try exports.setNamedProperty("textBufferGetTextRangeByCoords", try env.createFunction(textBufferGetTextRangeByCoords, null));
+    try exports.setNamedProperty("createTextBufferView", try env.createFunction(createTextBufferView, null));
+    try exports.setNamedProperty("destroyTextBufferView", try env.createFunction(destroyTextBufferView, null));
+    try exports.setNamedProperty("textBufferViewSetSelection", try env.createFunction(textBufferViewSetSelection, null));
+    try exports.setNamedProperty("textBufferViewResetSelection", try env.createFunction(textBufferViewResetSelection, null));
+    try exports.setNamedProperty("textBufferViewGetSelection", try env.createFunction(textBufferViewGetSelection, null));
+    try exports.setNamedProperty("textBufferViewSetLocalSelection", try env.createFunction(textBufferViewSetLocalSelection, null));
+    try exports.setNamedProperty("textBufferViewUpdateSelection", try env.createFunction(textBufferViewUpdateSelection, null));
+    try exports.setNamedProperty("textBufferViewUpdateLocalSelection", try env.createFunction(textBufferViewUpdateLocalSelection, null));
+    try exports.setNamedProperty("textBufferViewResetLocalSelection", try env.createFunction(textBufferViewResetLocalSelection, null));
+    try exports.setNamedProperty("textBufferViewSetWrapWidth", try env.createFunction(textBufferViewSetWrapWidth, null));
+    try exports.setNamedProperty("textBufferViewSetWrapMode", try env.createFunction(textBufferViewSetWrapMode, null));
+    try exports.setNamedProperty("textBufferViewSetViewportSize", try env.createFunction(textBufferViewSetViewportSize, null));
+    try exports.setNamedProperty("textBufferViewSetViewport", try env.createFunction(textBufferViewSetViewport, null));
+    try exports.setNamedProperty("textBufferViewGetVirtualLineCount", try env.createFunction(textBufferViewGetVirtualLineCount, null));
+    try exports.setNamedProperty("textBufferViewGetLineInfo", try env.createFunction(textBufferViewGetLineInfo, null));
+    try exports.setNamedProperty("textBufferViewGetLogicalLineInfo", try env.createFunction(textBufferViewGetLogicalLineInfo, null));
+    try exports.setNamedProperty("textBufferViewGetSelectedTextBytes", try env.createFunction(textBufferViewGetSelectedTextBytes, null));
+    try exports.setNamedProperty("textBufferViewGetPlainTextBytes", try env.createFunction(textBufferViewGetPlainTextBytes, null));
+    try exports.setNamedProperty("textBufferViewSetTabIndicator", try env.createFunction(textBufferViewSetTabIndicator, null));
+    try exports.setNamedProperty("textBufferViewSetTabIndicatorColor", try env.createFunction(textBufferViewSetTabIndicatorColor, null));
+    try exports.setNamedProperty("textBufferViewSetTruncate", try env.createFunction(textBufferViewSetTruncate, null));
+    try exports.setNamedProperty("textBufferViewMeasureForDimensions", try env.createFunction(textBufferViewMeasureForDimensions, null));
+    try exports.setNamedProperty("textBufferAddHighlightByCharRange", try env.createFunction(textBufferAddHighlightByCharRange, null));
+    try exports.setNamedProperty("textBufferAddHighlight", try env.createFunction(textBufferAddHighlight, null));
+    try exports.setNamedProperty("textBufferRemoveHighlightsByRef", try env.createFunction(textBufferRemoveHighlightsByRef, null));
+    try exports.setNamedProperty("textBufferClearLineHighlights", try env.createFunction(textBufferClearLineHighlights, null));
+    try exports.setNamedProperty("textBufferClearAllHighlights", try env.createFunction(textBufferClearAllHighlights, null));
+    try exports.setNamedProperty("textBufferSetSyntaxStyle", try env.createFunction(textBufferSetSyntaxStyle, null));
+    try exports.setNamedProperty("textBufferGetLineHighlights", try env.createFunction(textBufferGetLineHighlights, null));
+    try exports.setNamedProperty("textBufferGetHighlightCount", try env.createFunction(textBufferGetHighlightCount, null));
     try exports.setNamedProperty("resizeRenderer", try env.createFunction(resizeRenderer, null));
     try exports.setNamedProperty("setCursorPosition", try env.createFunction(setCursorPosition, null));
     try exports.setNamedProperty("setCursorStyle", try env.createFunction(setCursorStyle, null));

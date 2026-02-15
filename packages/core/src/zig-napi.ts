@@ -236,6 +236,107 @@ interface NapiSymbols {
     bg: Float32Array,
     attributes: number,
   ) => void
+
+  createTextBuffer: (widthMethod: number) => Pointer | null
+  destroyTextBuffer: (buffer: Pointer) => void
+  textBufferGetLength: (buffer: Pointer) => number
+  textBufferGetByteSize: (buffer: Pointer) => number
+  textBufferReset: (buffer: Pointer) => void
+  textBufferClear: (buffer: Pointer) => void
+  textBufferSetDefaultFg: (buffer: Pointer, fg: Float32Array | null) => void
+  textBufferSetDefaultBg: (buffer: Pointer, bg: Float32Array | null) => void
+  textBufferSetDefaultAttributes: (buffer: Pointer, attributes: number | null) => void
+  textBufferResetDefaults: (buffer: Pointer) => void
+  textBufferGetTabWidth: (buffer: Pointer) => number
+  textBufferSetTabWidth: (buffer: Pointer, width: number) => void
+  textBufferRegisterMemBuffer: (buffer: Pointer, bytes: Uint8Array, owned: boolean) => number
+  textBufferReplaceMemBuffer: (buffer: Pointer, memId: number, bytes: Uint8Array, owned: boolean) => boolean
+  textBufferClearMemRegistry: (buffer: Pointer) => void
+  textBufferSetTextFromMem: (buffer: Pointer, memId: number) => void
+  textBufferAppend: (buffer: Pointer, bytes: Uint8Array) => void
+  textBufferAppendFromMemId: (buffer: Pointer, memId: number) => void
+  textBufferLoadFile: (buffer: Pointer, path: string) => boolean
+  textBufferSetStyledText: (
+    buffer: Pointer,
+    chunks: Array<{ text: string; fg?: RGBA | null; bg?: RGBA | null; attributes?: number; link?: { url: string } }>,
+  ) => void
+  textBufferGetLineCount: (buffer: Pointer) => number
+  textBufferGetPlainTextBytes: (buffer: Pointer, maxLength: number) => ArrayBuffer | null
+  textBufferGetTextRange: (
+    buffer: Pointer,
+    startOffset: number,
+    endOffset: number,
+    maxLength: number,
+  ) => ArrayBuffer | null
+  textBufferGetTextRangeByCoords: (
+    buffer: Pointer,
+    startRow: number,
+    startCol: number,
+    endRow: number,
+    endCol: number,
+    maxLength: number,
+  ) => ArrayBuffer | null
+  createTextBufferView: (textBuffer: Pointer) => Pointer | null
+  destroyTextBufferView: (view: Pointer) => void
+  textBufferViewSetSelection: (
+    view: Pointer,
+    start: number,
+    end: number,
+    bgColor: Float32Array | null,
+    fgColor: Float32Array | null,
+  ) => void
+  textBufferViewResetSelection: (view: Pointer) => void
+  textBufferViewGetSelection: (view: Pointer) => { start: number; end: number } | null
+  textBufferViewSetLocalSelection: (
+    view: Pointer,
+    anchorX: number,
+    anchorY: number,
+    focusX: number,
+    focusY: number,
+    bgColor: Float32Array | null,
+    fgColor: Float32Array | null,
+  ) => boolean
+  textBufferViewUpdateSelection: (
+    view: Pointer,
+    end: number,
+    bgColor: Float32Array | null,
+    fgColor: Float32Array | null,
+  ) => void
+  textBufferViewUpdateLocalSelection: (
+    view: Pointer,
+    anchorX: number,
+    anchorY: number,
+    focusX: number,
+    focusY: number,
+    bgColor: Float32Array | null,
+    fgColor: Float32Array | null,
+  ) => boolean
+  textBufferViewResetLocalSelection: (view: Pointer) => void
+  textBufferViewSetWrapWidth: (view: Pointer, width: number) => void
+  textBufferViewSetWrapMode: (view: Pointer, mode: number) => void
+  textBufferViewSetViewportSize: (view: Pointer, width: number, height: number) => void
+  textBufferViewSetViewport: (view: Pointer, x: number, y: number, width: number, height: number) => void
+  textBufferViewGetVirtualLineCount: (view: Pointer) => number
+  textBufferViewGetLineInfo: (view: Pointer) => LineInfo
+  textBufferViewGetLogicalLineInfo: (view: Pointer) => LineInfo
+  textBufferViewGetSelectedTextBytes: (view: Pointer, maxLength: number) => ArrayBuffer | null
+  textBufferViewGetPlainTextBytes: (view: Pointer, maxLength: number) => ArrayBuffer | null
+  textBufferViewSetTabIndicator: (view: Pointer, indicator: number) => void
+  textBufferViewSetTabIndicatorColor: (view: Pointer, color: Float32Array) => void
+  textBufferViewSetTruncate: (view: Pointer, truncate: boolean) => void
+  textBufferViewMeasureForDimensions: (
+    view: Pointer,
+    width: number,
+    height: number,
+  ) => { lineCount: number; maxWidth: number } | null
+  textBufferAddHighlightByCharRange: (buffer: Pointer, highlight: Highlight) => void
+  textBufferAddHighlight: (buffer: Pointer, lineIdx: number, highlight: Highlight) => void
+  textBufferRemoveHighlightsByRef: (buffer: Pointer, hlRef: number) => void
+  textBufferClearLineHighlights: (buffer: Pointer, lineIdx: number) => void
+  textBufferClearAllHighlights: (buffer: Pointer) => void
+  textBufferSetSyntaxStyle: (buffer: Pointer, style: Pointer | null) => void
+  textBufferGetLineHighlights: (buffer: Pointer, lineIdx: number) => Highlight[]
+  textBufferGetHighlightCount: (buffer: Pointer) => number
 }
 
 const REQUIRED_SYMBOLS = [
@@ -318,6 +419,60 @@ const REQUIRED_SYMBOLS = [
   "queryPixelResolution",
   "writeOut",
   "bufferDrawChar",
+  "createTextBuffer",
+  "destroyTextBuffer",
+  "textBufferGetLength",
+  "textBufferGetByteSize",
+  "textBufferReset",
+  "textBufferClear",
+  "textBufferSetDefaultFg",
+  "textBufferSetDefaultBg",
+  "textBufferSetDefaultAttributes",
+  "textBufferResetDefaults",
+  "textBufferGetTabWidth",
+  "textBufferSetTabWidth",
+  "textBufferRegisterMemBuffer",
+  "textBufferReplaceMemBuffer",
+  "textBufferClearMemRegistry",
+  "textBufferSetTextFromMem",
+  "textBufferAppend",
+  "textBufferAppendFromMemId",
+  "textBufferLoadFile",
+  "textBufferSetStyledText",
+  "textBufferGetLineCount",
+  "textBufferGetPlainTextBytes",
+  "textBufferGetTextRange",
+  "textBufferGetTextRangeByCoords",
+  "createTextBufferView",
+  "destroyTextBufferView",
+  "textBufferViewSetSelection",
+  "textBufferViewResetSelection",
+  "textBufferViewGetSelection",
+  "textBufferViewSetLocalSelection",
+  "textBufferViewUpdateSelection",
+  "textBufferViewUpdateLocalSelection",
+  "textBufferViewResetLocalSelection",
+  "textBufferViewSetWrapWidth",
+  "textBufferViewSetWrapMode",
+  "textBufferViewSetViewportSize",
+  "textBufferViewSetViewport",
+  "textBufferViewGetVirtualLineCount",
+  "textBufferViewGetLineInfo",
+  "textBufferViewGetLogicalLineInfo",
+  "textBufferViewGetSelectedTextBytes",
+  "textBufferViewGetPlainTextBytes",
+  "textBufferViewSetTabIndicator",
+  "textBufferViewSetTabIndicatorColor",
+  "textBufferViewSetTruncate",
+  "textBufferViewMeasureForDimensions",
+  "textBufferAddHighlightByCharRange",
+  "textBufferAddHighlight",
+  "textBufferRemoveHighlightsByRef",
+  "textBufferClearLineHighlights",
+  "textBufferClearAllHighlights",
+  "textBufferSetSyntaxStyle",
+  "textBufferGetLineHighlights",
+  "textBufferGetHighlightCount",
 ] as const
 
 function assertSymbols(raw: unknown): asserts raw is NapiSymbols {
@@ -924,6 +1079,315 @@ export class NapiRenderLib implements RenderLib {
     this.opentui.symbols.bufferDrawEditorView(buffer, view, x, y)
   }
 
+  public createTextBuffer(widthMethod: WidthMethod): TextBuffer {
+    const widthMethodCode = widthMethod === "wcwidth" ? 0 : 1
+    const bufferPtr = this.opentui.symbols.createTextBuffer(widthMethodCode)
+    if (!bufferPtr) {
+      throw new Error("Failed to create TextBuffer")
+    }
+    return new TextBuffer(this, bufferPtr)
+  }
+
+  public destroyTextBuffer(buffer: Pointer): void {
+    this.opentui.symbols.destroyTextBuffer(buffer)
+  }
+
+  public textBufferGetLength(buffer: Pointer): number {
+    return this.opentui.symbols.textBufferGetLength(buffer)
+  }
+
+  public textBufferGetByteSize(buffer: Pointer): number {
+    return this.opentui.symbols.textBufferGetByteSize(buffer)
+  }
+
+  public textBufferReset(buffer: Pointer): void {
+    this.opentui.symbols.textBufferReset(buffer)
+  }
+
+  public textBufferClear(buffer: Pointer): void {
+    this.opentui.symbols.textBufferClear(buffer)
+  }
+
+  public textBufferRegisterMemBuffer(buffer: Pointer, bytes: Uint8Array, owned: boolean = false): number {
+    const result = this.opentui.symbols.textBufferRegisterMemBuffer(buffer, bytes, owned)
+    if (result === 0xffff) {
+      throw new Error("Failed to register memory buffer")
+    }
+    return result
+  }
+
+  public textBufferReplaceMemBuffer(
+    buffer: Pointer,
+    memId: number,
+    bytes: Uint8Array,
+    owned: boolean = false,
+  ): boolean {
+    return this.opentui.symbols.textBufferReplaceMemBuffer(buffer, memId, bytes, owned)
+  }
+
+  public textBufferClearMemRegistry(buffer: Pointer): void {
+    this.opentui.symbols.textBufferClearMemRegistry(buffer)
+  }
+
+  public textBufferSetTextFromMem(buffer: Pointer, memId: number): void {
+    this.opentui.symbols.textBufferSetTextFromMem(buffer, memId)
+  }
+
+  public textBufferAppend(buffer: Pointer, bytes: Uint8Array): void {
+    this.opentui.symbols.textBufferAppend(buffer, bytes)
+  }
+
+  public textBufferAppendFromMemId(buffer: Pointer, memId: number): void {
+    this.opentui.symbols.textBufferAppendFromMemId(buffer, memId)
+  }
+
+  public textBufferLoadFile(buffer: Pointer, path: string): boolean {
+    return this.opentui.symbols.textBufferLoadFile(buffer, path)
+  }
+
+  public textBufferSetStyledText(
+    buffer: Pointer,
+    chunks: Array<{ text: string; fg?: RGBA | null; bg?: RGBA | null; attributes?: number; link?: { url: string } }>,
+  ): void {
+    const nonEmptyChunks = chunks.filter((chunk) => chunk.text.length > 0)
+    if (nonEmptyChunks.length === 0) {
+      this.textBufferClear(buffer)
+      return
+    }
+    this.opentui.symbols.textBufferSetStyledText(buffer, nonEmptyChunks)
+  }
+
+  public textBufferSetDefaultFg(buffer: Pointer, fg: RGBA | null): void {
+    this.opentui.symbols.textBufferSetDefaultFg(buffer, fg?.buffer ?? null)
+  }
+
+  public textBufferSetDefaultBg(buffer: Pointer, bg: RGBA | null): void {
+    this.opentui.symbols.textBufferSetDefaultBg(buffer, bg?.buffer ?? null)
+  }
+
+  public textBufferSetDefaultAttributes(buffer: Pointer, attributes: number | null): void {
+    this.opentui.symbols.textBufferSetDefaultAttributes(buffer, attributes)
+  }
+
+  public textBufferResetDefaults(buffer: Pointer): void {
+    this.opentui.symbols.textBufferResetDefaults(buffer)
+  }
+
+  public textBufferGetTabWidth(buffer: Pointer): number {
+    return this.opentui.symbols.textBufferGetTabWidth(buffer)
+  }
+
+  public textBufferSetTabWidth(buffer: Pointer, width: number): void {
+    this.opentui.symbols.textBufferSetTabWidth(buffer, width)
+  }
+
+  public textBufferGetLineCount(buffer: Pointer): number {
+    return this.opentui.symbols.textBufferGetLineCount(buffer)
+  }
+
+  public getPlainTextBytes(buffer: Pointer, maxLength: number): Uint8Array | null {
+    const raw = this.opentui.symbols.textBufferGetPlainTextBytes(buffer, maxLength)
+    return raw ? new Uint8Array(raw) : null
+  }
+
+  public textBufferGetTextRange(
+    buffer: Pointer,
+    startOffset: number,
+    endOffset: number,
+    maxLength: number,
+  ): Uint8Array | null {
+    const raw = this.opentui.symbols.textBufferGetTextRange(buffer, startOffset, endOffset, maxLength)
+    return raw ? new Uint8Array(raw) : null
+  }
+
+  public textBufferGetTextRangeByCoords(
+    buffer: Pointer,
+    startRow: number,
+    startCol: number,
+    endRow: number,
+    endCol: number,
+    maxLength: number,
+  ): Uint8Array | null {
+    const raw = this.opentui.symbols.textBufferGetTextRangeByCoords(
+      buffer,
+      startRow,
+      startCol,
+      endRow,
+      endCol,
+      maxLength,
+    )
+    return raw ? new Uint8Array(raw) : null
+  }
+
+  public createTextBufferView(textBuffer: Pointer): Pointer {
+    const viewPtr = this.opentui.symbols.createTextBufferView(textBuffer)
+    if (!viewPtr) {
+      throw new Error("Failed to create TextBufferView")
+    }
+    return viewPtr
+  }
+
+  public destroyTextBufferView(view: Pointer): void {
+    this.opentui.symbols.destroyTextBufferView(view)
+  }
+
+  public textBufferViewSetSelection(
+    view: Pointer,
+    start: number,
+    end: number,
+    bgColor: RGBA | null,
+    fgColor: RGBA | null,
+  ): void {
+    this.opentui.symbols.textBufferViewSetSelection(view, start, end, bgColor?.buffer ?? null, fgColor?.buffer ?? null)
+  }
+
+  public textBufferViewResetSelection(view: Pointer): void {
+    this.opentui.symbols.textBufferViewResetSelection(view)
+  }
+
+  public textBufferViewGetSelection(view: Pointer): { start: number; end: number } | null {
+    return this.opentui.symbols.textBufferViewGetSelection(view)
+  }
+
+  public textBufferViewSetLocalSelection(
+    view: Pointer,
+    anchorX: number,
+    anchorY: number,
+    focusX: number,
+    focusY: number,
+    bgColor: RGBA | null,
+    fgColor: RGBA | null,
+  ): boolean {
+    return this.opentui.symbols.textBufferViewSetLocalSelection(
+      view,
+      anchorX,
+      anchorY,
+      focusX,
+      focusY,
+      bgColor?.buffer ?? null,
+      fgColor?.buffer ?? null,
+    )
+  }
+
+  public textBufferViewUpdateSelection(view: Pointer, end: number, bgColor: RGBA | null, fgColor: RGBA | null): void {
+    this.opentui.symbols.textBufferViewUpdateSelection(view, end, bgColor?.buffer ?? null, fgColor?.buffer ?? null)
+  }
+
+  public textBufferViewUpdateLocalSelection(
+    view: Pointer,
+    anchorX: number,
+    anchorY: number,
+    focusX: number,
+    focusY: number,
+    bgColor: RGBA | null,
+    fgColor: RGBA | null,
+  ): boolean {
+    return this.opentui.symbols.textBufferViewUpdateLocalSelection(
+      view,
+      anchorX,
+      anchorY,
+      focusX,
+      focusY,
+      bgColor?.buffer ?? null,
+      fgColor?.buffer ?? null,
+    )
+  }
+
+  public textBufferViewResetLocalSelection(view: Pointer): void {
+    this.opentui.symbols.textBufferViewResetLocalSelection(view)
+  }
+
+  public textBufferViewSetWrapWidth(view: Pointer, width: number): void {
+    this.opentui.symbols.textBufferViewSetWrapWidth(view, width)
+  }
+
+  public textBufferViewSetWrapMode(view: Pointer, mode: "none" | "char" | "word"): void {
+    const modeValue = mode === "none" ? 0 : mode === "char" ? 1 : 2
+    this.opentui.symbols.textBufferViewSetWrapMode(view, modeValue)
+  }
+
+  public textBufferViewSetViewportSize(view: Pointer, width: number, height: number): void {
+    this.opentui.symbols.textBufferViewSetViewportSize(view, width, height)
+  }
+
+  public textBufferViewSetViewport(view: Pointer, x: number, y: number, width: number, height: number): void {
+    this.opentui.symbols.textBufferViewSetViewport(view, x, y, width, height)
+  }
+
+  public textBufferViewGetLineInfo(view: Pointer): LineInfo {
+    return this.opentui.symbols.textBufferViewGetLineInfo(view)
+  }
+
+  public textBufferViewGetLogicalLineInfo(view: Pointer): LineInfo {
+    return this.opentui.symbols.textBufferViewGetLogicalLineInfo(view)
+  }
+
+  public textBufferViewGetSelectedTextBytes(view: Pointer, maxLength: number): Uint8Array | null {
+    const raw = this.opentui.symbols.textBufferViewGetSelectedTextBytes(view, maxLength)
+    return raw ? new Uint8Array(raw) : null
+  }
+
+  public textBufferViewGetPlainTextBytes(view: Pointer, maxLength: number): Uint8Array | null {
+    const raw = this.opentui.symbols.textBufferViewGetPlainTextBytes(view, maxLength)
+    return raw ? new Uint8Array(raw) : null
+  }
+
+  public textBufferViewSetTabIndicator(view: Pointer, indicator: number): void {
+    this.opentui.symbols.textBufferViewSetTabIndicator(view, indicator)
+  }
+
+  public textBufferViewSetTabIndicatorColor(view: Pointer, color: RGBA): void {
+    this.opentui.symbols.textBufferViewSetTabIndicatorColor(view, color.buffer)
+  }
+
+  public textBufferViewSetTruncate(view: Pointer, truncate: boolean): void {
+    this.opentui.symbols.textBufferViewSetTruncate(view, truncate)
+  }
+
+  public textBufferViewMeasureForDimensions(
+    view: Pointer,
+    width: number,
+    height: number,
+  ): { lineCount: number; maxWidth: number } | null {
+    return this.opentui.symbols.textBufferViewMeasureForDimensions(view, width, height)
+  }
+
+  public textBufferViewGetVirtualLineCount(view: Pointer): number {
+    return this.opentui.symbols.textBufferViewGetVirtualLineCount(view)
+  }
+
+  public textBufferAddHighlightByCharRange(buffer: Pointer, highlight: Highlight): void {
+    this.opentui.symbols.textBufferAddHighlightByCharRange(buffer, highlight)
+  }
+
+  public textBufferAddHighlight(buffer: Pointer, lineIdx: number, highlight: Highlight): void {
+    this.opentui.symbols.textBufferAddHighlight(buffer, lineIdx, highlight)
+  }
+
+  public textBufferRemoveHighlightsByRef(buffer: Pointer, hlRef: number): void {
+    this.opentui.symbols.textBufferRemoveHighlightsByRef(buffer, hlRef)
+  }
+
+  public textBufferClearLineHighlights(buffer: Pointer, lineIdx: number): void {
+    this.opentui.symbols.textBufferClearLineHighlights(buffer, lineIdx)
+  }
+
+  public textBufferClearAllHighlights(buffer: Pointer): void {
+    this.opentui.symbols.textBufferClearAllHighlights(buffer)
+  }
+
+  public textBufferSetSyntaxStyle(buffer: Pointer, style: Pointer | null): void {
+    this.opentui.symbols.textBufferSetSyntaxStyle(buffer, style)
+  }
+
+  public textBufferGetLineHighlights(buffer: Pointer, lineIdx: number): Array<Highlight> {
+    return this.opentui.symbols.textBufferGetLineHighlights(buffer, lineIdx)
+  }
+
+  public textBufferGetHighlightCount(buffer: Pointer): number {
+    return this.opentui.symbols.textBufferGetHighlightCount(buffer)
+  }
+
   public onNativeEvent(name: string, handler: (data: ArrayBuffer) => void): void {
     this._nativeEvents.on(name, handler)
   }
@@ -939,94 +1403,6 @@ export class NapiRenderLib implements RenderLib {
   public onAnyNativeEvent(handler: (name: string, data: ArrayBuffer) => void): void {
     this._anyEventHandlers.push(handler)
   }
-
-  createTextBuffer!: (widthMethod: WidthMethod) => TextBuffer
-  destroyTextBuffer!: (buffer: Pointer) => void
-  textBufferGetLength!: (buffer: Pointer) => number
-  textBufferGetByteSize!: (buffer: Pointer) => number
-  textBufferReset!: (buffer: Pointer) => void
-  textBufferClear!: (buffer: Pointer) => void
-  textBufferRegisterMemBuffer!: (buffer: Pointer, bytes: Uint8Array, owned?: boolean) => number
-  textBufferReplaceMemBuffer!: (buffer: Pointer, memId: number, bytes: Uint8Array, owned?: boolean) => boolean
-  textBufferClearMemRegistry!: (buffer: Pointer) => void
-  textBufferSetTextFromMem!: (buffer: Pointer, memId: number) => void
-  textBufferAppend!: (buffer: Pointer, bytes: Uint8Array) => void
-  textBufferAppendFromMemId!: (buffer: Pointer, memId: number) => void
-  textBufferLoadFile!: (buffer: Pointer, path: string) => boolean
-  textBufferSetStyledText!: (
-    buffer: Pointer,
-    chunks: Array<{ text: string; fg?: RGBA | null; bg?: RGBA | null; attributes?: number; link?: { url: string } }>,
-  ) => void
-  textBufferSetDefaultFg!: (buffer: Pointer, fg: RGBA | null) => void
-  textBufferSetDefaultBg!: (buffer: Pointer, bg: RGBA | null) => void
-  textBufferSetDefaultAttributes!: (buffer: Pointer, attributes: number | null) => void
-  textBufferResetDefaults!: (buffer: Pointer) => void
-  textBufferGetTabWidth!: (buffer: Pointer) => number
-  textBufferSetTabWidth!: (buffer: Pointer, width: number) => void
-  textBufferGetLineCount!: (buffer: Pointer) => number
-  getPlainTextBytes!: (buffer: Pointer, maxLength: number) => Uint8Array | null
-  textBufferGetTextRange!: (
-    buffer: Pointer,
-    startOffset: number,
-    endOffset: number,
-    maxLength: number,
-  ) => Uint8Array | null
-  textBufferGetTextRangeByCoords!: (
-    buffer: Pointer,
-    startRow: number,
-    startCol: number,
-    endRow: number,
-    endCol: number,
-    maxLength: number,
-  ) => Uint8Array | null
-  createTextBufferView!: (textBuffer: Pointer) => Pointer
-  destroyTextBufferView!: (view: Pointer) => void
-  textBufferViewSetSelection!: (
-    view: Pointer,
-    start: number,
-    end: number,
-    bgColor: RGBA | null,
-    fgColor: RGBA | null,
-  ) => void
-  textBufferViewResetSelection!: (view: Pointer) => void
-  textBufferViewGetSelection!: (view: Pointer) => { start: number; end: number } | null
-  textBufferViewSetLocalSelection!: (
-    view: Pointer,
-    anchorX: number,
-    anchorY: number,
-    focusX: number,
-    focusY: number,
-    bgColor: RGBA | null,
-    fgColor: RGBA | null,
-  ) => boolean
-  textBufferViewUpdateSelection!: (view: Pointer, end: number, bgColor: RGBA | null, fgColor: RGBA | null) => void
-  textBufferViewUpdateLocalSelection!: (
-    view: Pointer,
-    anchorX: number,
-    anchorY: number,
-    focusX: number,
-    focusY: number,
-    bgColor: RGBA | null,
-    fgColor: RGBA | null,
-  ) => boolean
-  textBufferViewResetLocalSelection!: (view: Pointer) => void
-  textBufferViewSetWrapWidth!: (view: Pointer, width: number) => void
-  textBufferViewSetWrapMode!: (view: Pointer, mode: "none" | "char" | "word") => void
-  textBufferViewSetViewportSize!: (view: Pointer, width: number, height: number) => void
-  textBufferViewSetViewport!: (view: Pointer, x: number, y: number, width: number, height: number) => void
-  textBufferViewGetLineInfo!: (view: Pointer) => LineInfo
-  textBufferViewGetLogicalLineInfo!: (view: Pointer) => LineInfo
-  textBufferViewGetSelectedTextBytes!: (view: Pointer, maxLength: number) => Uint8Array | null
-  textBufferViewGetPlainTextBytes!: (view: Pointer, maxLength: number) => Uint8Array | null
-  textBufferViewSetTabIndicator!: (view: Pointer, indicator: number) => void
-  textBufferViewSetTabIndicatorColor!: (view: Pointer, color: RGBA) => void
-  textBufferViewSetTruncate!: (view: Pointer, truncate: boolean) => void
-  textBufferViewMeasureForDimensions!: (
-    view: Pointer,
-    width: number,
-    height: number,
-  ) => { lineCount: number; maxWidth: number } | null
-  textBufferViewGetVirtualLineCount!: (view: Pointer) => number
   createEditBuffer!: (widthMethod: WidthMethod) => Pointer
   destroyEditBuffer!: (buffer: Pointer) => void
   editBufferSetText!: (buffer: Pointer, textBytes: Uint8Array) => void
@@ -1156,14 +1532,6 @@ export class NapiRenderLib implements RenderLib {
   ) => void
   editorViewSetTabIndicator!: (view: Pointer, indicator: number) => void
   editorViewSetTabIndicatorColor!: (view: Pointer, color: RGBA) => void
-  textBufferAddHighlightByCharRange!: (buffer: Pointer, highlight: Highlight) => void
-  textBufferAddHighlight!: (buffer: Pointer, lineIdx: number, highlight: Highlight) => void
-  textBufferRemoveHighlightsByRef!: (buffer: Pointer, hlRef: number) => void
-  textBufferClearLineHighlights!: (buffer: Pointer, lineIdx: number) => void
-  textBufferClearAllHighlights!: (buffer: Pointer) => void
-  textBufferSetSyntaxStyle!: (buffer: Pointer, style: Pointer | null) => void
-  textBufferGetLineHighlights!: (buffer: Pointer, lineIdx: number) => Array<Highlight>
-  textBufferGetHighlightCount!: (buffer: Pointer) => number
   getArenaAllocatedBytes!: () => number
   createSyntaxStyle!: () => Pointer
   destroySyntaxStyle!: (style: Pointer) => void
