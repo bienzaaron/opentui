@@ -23,6 +23,7 @@ pub const Terminal = terminal.Terminal;
 pub const RGBA = buffer.RGBA;
 pub const TextBuffer = text_buffer.UnifiedTextBuffer;
 pub const TextBufferView = text_buffer_view.TextBufferView;
+pub const EditBuffer = edit_buffer_mod.EditBuffer;
 pub const EditorView = editor_view.EditorView;
 pub const StyledChunk = text_buffer.StyledChunk;
 pub const SyntaxStyle = syntax_style.SyntaxStyle;

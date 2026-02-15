@@ -337,6 +337,135 @@ interface NapiSymbols {
   textBufferSetSyntaxStyle: (buffer: Pointer, style: Pointer | null) => void
   textBufferGetLineHighlights: (buffer: Pointer, lineIdx: number) => Highlight[]
   textBufferGetHighlightCount: (buffer: Pointer) => number
+
+  createEditBuffer: (widthMethod: number) => Pointer | null
+  destroyEditBuffer: (buffer: Pointer) => void
+  editBufferSetText: (buffer: Pointer, textBytes: Uint8Array) => void
+  editBufferSetTextFromMem: (buffer: Pointer, memId: number) => void
+  editBufferReplaceText: (buffer: Pointer, textBytes: Uint8Array) => void
+  editBufferReplaceTextFromMem: (buffer: Pointer, memId: number) => void
+  editBufferGetText: (buffer: Pointer, maxLength: number) => ArrayBuffer | null
+  editBufferInsertChar: (buffer: Pointer, char: string) => void
+  editBufferInsertText: (buffer: Pointer, text: string) => void
+  editBufferDeleteChar: (buffer: Pointer) => void
+  editBufferDeleteCharBackward: (buffer: Pointer) => void
+  editBufferDeleteRange: (buffer: Pointer, startLine: number, startCol: number, endLine: number, endCol: number) => void
+  editBufferNewLine: (buffer: Pointer) => void
+  editBufferDeleteLine: (buffer: Pointer) => void
+  editBufferMoveCursorLeft: (buffer: Pointer) => void
+  editBufferMoveCursorRight: (buffer: Pointer) => void
+  editBufferMoveCursorUp: (buffer: Pointer) => void
+  editBufferMoveCursorDown: (buffer: Pointer) => void
+  editBufferGotoLine: (buffer: Pointer, line: number) => void
+  editBufferSetCursor: (buffer: Pointer, line: number, col: number) => void
+  editBufferSetCursorToLineCol: (buffer: Pointer, line: number, col: number) => void
+  editBufferSetCursorByOffset: (buffer: Pointer, offset: number) => void
+  editBufferGetCursorPosition: (buffer: Pointer) => LogicalCursor
+  editBufferGetId: (buffer: Pointer) => number
+  editBufferGetTextBuffer: (buffer: Pointer) => Pointer
+  editBufferDebugLogRope: (buffer: Pointer) => void
+  editBufferUndo: (buffer: Pointer, maxLength: number) => ArrayBuffer | null
+  editBufferRedo: (buffer: Pointer, maxLength: number) => ArrayBuffer | null
+  editBufferCanUndo: (buffer: Pointer) => boolean
+  editBufferCanRedo: (buffer: Pointer) => boolean
+  editBufferClearHistory: (buffer: Pointer) => void
+  editBufferClear: (buffer: Pointer) => void
+  editBufferGetNextWordBoundary: (buffer: Pointer) => LogicalCursor
+  editBufferGetPrevWordBoundary: (buffer: Pointer) => LogicalCursor
+  editBufferGetEOL: (buffer: Pointer) => LogicalCursor
+  editBufferOffsetToPosition: (buffer: Pointer, offset: number) => LogicalCursor | null
+  editBufferPositionToOffset: (buffer: Pointer, row: number, col: number) => number
+  editBufferGetLineStartOffset: (buffer: Pointer, row: number) => number
+  editBufferGetTextRange: (
+    buffer: Pointer,
+    startOffset: number,
+    endOffset: number,
+    maxLength: number,
+  ) => ArrayBuffer | null
+  editBufferGetTextRangeByCoords: (
+    buffer: Pointer,
+    startRow: number,
+    startCol: number,
+    endRow: number,
+    endCol: number,
+    maxLength: number,
+  ) => ArrayBuffer | null
+  createEditorView: (editBufferPtr: Pointer, viewportWidth: number, viewportHeight: number) => Pointer | null
+  destroyEditorView: (view: Pointer) => void
+  editorViewSetViewportSize: (view: Pointer, width: number, height: number) => void
+  editorViewSetViewport: (
+    view: Pointer,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    moveCursor: boolean,
+  ) => void
+  editorViewGetViewport: (view: Pointer) => { offsetY: number; offsetX: number; height: number; width: number }
+  editorViewSetScrollMargin: (view: Pointer, margin: number) => void
+  editorViewSetWrapMode: (view: Pointer, mode: number) => void
+  editorViewGetVirtualLineCount: (view: Pointer) => number
+  editorViewGetTotalVirtualLineCount: (view: Pointer) => number
+  editorViewGetTextBufferView: (view: Pointer) => Pointer
+  editorViewSetSelection: (
+    view: Pointer,
+    start: number,
+    end: number,
+    bgColor: Float32Array | null,
+    fgColor: Float32Array | null,
+  ) => void
+  editorViewResetSelection: (view: Pointer) => void
+  editorViewGetSelection: (view: Pointer) => { start: number; end: number } | null
+  editorViewSetLocalSelection: (
+    view: Pointer,
+    anchorX: number,
+    anchorY: number,
+    focusX: number,
+    focusY: number,
+    bgColor: Float32Array | null,
+    fgColor: Float32Array | null,
+    updateCursor: boolean,
+    followCursor: boolean,
+  ) => boolean
+  editorViewUpdateSelection: (
+    view: Pointer,
+    end: number,
+    bgColor: Float32Array | null,
+    fgColor: Float32Array | null,
+  ) => void
+  editorViewUpdateLocalSelection: (
+    view: Pointer,
+    anchorX: number,
+    anchorY: number,
+    focusX: number,
+    focusY: number,
+    bgColor: Float32Array | null,
+    fgColor: Float32Array | null,
+    updateCursor: boolean,
+    followCursor: boolean,
+  ) => boolean
+  editorViewResetLocalSelection: (view: Pointer) => void
+  editorViewGetSelectedTextBytes: (view: Pointer, maxLength: number) => ArrayBuffer | null
+  editorViewGetCursor: (view: Pointer) => { row: number; col: number }
+  editorViewGetText: (view: Pointer, maxLength: number) => ArrayBuffer | null
+  editorViewGetVisualCursor: (view: Pointer) => VisualCursor
+  editorViewMoveUpVisual: (view: Pointer) => void
+  editorViewMoveDownVisual: (view: Pointer) => void
+  editorViewDeleteSelectedText: (view: Pointer) => void
+  editorViewSetCursorByOffset: (view: Pointer, offset: number) => void
+  editorViewGetNextWordBoundary: (view: Pointer) => VisualCursor
+  editorViewGetPrevWordBoundary: (view: Pointer) => VisualCursor
+  editorViewGetEOL: (view: Pointer) => VisualCursor
+  editorViewGetVisualSOL: (view: Pointer) => VisualCursor
+  editorViewGetVisualEOL: (view: Pointer) => VisualCursor
+  editorViewGetLineInfo: (view: Pointer) => LineInfo
+  editorViewGetLogicalLineInfo: (view: Pointer) => LineInfo
+  editorViewSetPlaceholderStyledText: (
+    view: Pointer,
+    chunks: Array<{ text: string; fg?: RGBA | null; bg?: RGBA | null; attributes?: number }>,
+  ) => void
+  editorViewSetTabIndicator: (view: Pointer, indicator: number) => void
+  editorViewSetTabIndicatorColor: (view: Pointer, color: Float32Array) => void
 }
 
 const REQUIRED_SYMBOLS = [
@@ -473,6 +602,81 @@ const REQUIRED_SYMBOLS = [
   "textBufferSetSyntaxStyle",
   "textBufferGetLineHighlights",
   "textBufferGetHighlightCount",
+  "createEditBuffer",
+  "destroyEditBuffer",
+  "editBufferSetText",
+  "editBufferSetTextFromMem",
+  "editBufferReplaceText",
+  "editBufferReplaceTextFromMem",
+  "editBufferGetText",
+  "editBufferInsertChar",
+  "editBufferInsertText",
+  "editBufferDeleteChar",
+  "editBufferDeleteCharBackward",
+  "editBufferDeleteRange",
+  "editBufferNewLine",
+  "editBufferDeleteLine",
+  "editBufferMoveCursorLeft",
+  "editBufferMoveCursorRight",
+  "editBufferMoveCursorUp",
+  "editBufferMoveCursorDown",
+  "editBufferGotoLine",
+  "editBufferSetCursor",
+  "editBufferSetCursorToLineCol",
+  "editBufferSetCursorByOffset",
+  "editBufferGetCursorPosition",
+  "editBufferGetId",
+  "editBufferGetTextBuffer",
+  "editBufferDebugLogRope",
+  "editBufferUndo",
+  "editBufferRedo",
+  "editBufferCanUndo",
+  "editBufferCanRedo",
+  "editBufferClearHistory",
+  "editBufferClear",
+  "editBufferGetNextWordBoundary",
+  "editBufferGetPrevWordBoundary",
+  "editBufferGetEOL",
+  "editBufferOffsetToPosition",
+  "editBufferPositionToOffset",
+  "editBufferGetLineStartOffset",
+  "editBufferGetTextRange",
+  "editBufferGetTextRangeByCoords",
+  "createEditorView",
+  "destroyEditorView",
+  "editorViewSetViewportSize",
+  "editorViewSetViewport",
+  "editorViewGetViewport",
+  "editorViewSetScrollMargin",
+  "editorViewSetWrapMode",
+  "editorViewGetVirtualLineCount",
+  "editorViewGetTotalVirtualLineCount",
+  "editorViewGetTextBufferView",
+  "editorViewSetSelection",
+  "editorViewResetSelection",
+  "editorViewGetSelection",
+  "editorViewSetLocalSelection",
+  "editorViewUpdateSelection",
+  "editorViewUpdateLocalSelection",
+  "editorViewResetLocalSelection",
+  "editorViewGetSelectedTextBytes",
+  "editorViewGetCursor",
+  "editorViewGetText",
+  "editorViewGetVisualCursor",
+  "editorViewMoveUpVisual",
+  "editorViewMoveDownVisual",
+  "editorViewDeleteSelectedText",
+  "editorViewSetCursorByOffset",
+  "editorViewGetNextWordBoundary",
+  "editorViewGetPrevWordBoundary",
+  "editorViewGetEOL",
+  "editorViewGetVisualSOL",
+  "editorViewGetVisualEOL",
+  "editorViewGetLineInfo",
+  "editorViewGetLogicalLineInfo",
+  "editorViewSetPlaceholderStyledText",
+  "editorViewSetTabIndicator",
+  "editorViewSetTabIndicatorColor",
 ] as const
 
 function assertSymbols(raw: unknown): asserts raw is NapiSymbols {
@@ -1403,91 +1607,215 @@ export class NapiRenderLib implements RenderLib {
   public onAnyNativeEvent(handler: (name: string, data: ArrayBuffer) => void): void {
     this._anyEventHandlers.push(handler)
   }
-  createEditBuffer!: (widthMethod: WidthMethod) => Pointer
-  destroyEditBuffer!: (buffer: Pointer) => void
-  editBufferSetText!: (buffer: Pointer, textBytes: Uint8Array) => void
-  editBufferSetTextFromMem!: (buffer: Pointer, memId: number) => void
-  editBufferReplaceText!: (buffer: Pointer, textBytes: Uint8Array) => void
-  editBufferReplaceTextFromMem!: (buffer: Pointer, memId: number) => void
-  editBufferGetText!: (buffer: Pointer, maxLength: number) => Uint8Array | null
-  editBufferInsertChar!: (buffer: Pointer, char: string) => void
-  editBufferInsertText!: (buffer: Pointer, text: string) => void
-  editBufferDeleteChar!: (buffer: Pointer) => void
-  editBufferDeleteCharBackward!: (buffer: Pointer) => void
-  editBufferDeleteRange!: (
+  public createEditBuffer(widthMethod: WidthMethod): Pointer {
+    const widthMethodCode = widthMethod === "wcwidth" ? 0 : 1
+    const bufferPtr = this.opentui.symbols.createEditBuffer(widthMethodCode)
+    if (!bufferPtr) throw new Error("Failed to create EditBuffer")
+    return bufferPtr
+  }
+  public destroyEditBuffer(buffer: Pointer): void {
+    this.opentui.symbols.destroyEditBuffer(buffer)
+  }
+  public editBufferSetText(buffer: Pointer, textBytes: Uint8Array): void {
+    this.opentui.symbols.editBufferSetText(buffer, textBytes)
+  }
+  public editBufferSetTextFromMem(buffer: Pointer, memId: number): void {
+    this.opentui.symbols.editBufferSetTextFromMem(buffer, memId)
+  }
+  public editBufferReplaceText(buffer: Pointer, textBytes: Uint8Array): void {
+    this.opentui.symbols.editBufferReplaceText(buffer, textBytes)
+  }
+  public editBufferReplaceTextFromMem(buffer: Pointer, memId: number): void {
+    this.opentui.symbols.editBufferReplaceTextFromMem(buffer, memId)
+  }
+  public editBufferGetText(buffer: Pointer, maxLength: number): Uint8Array | null {
+    const raw = this.opentui.symbols.editBufferGetText(buffer, maxLength)
+    return raw ? new Uint8Array(raw) : null
+  }
+  public editBufferInsertChar(buffer: Pointer, char: string): void {
+    this.opentui.symbols.editBufferInsertChar(buffer, char)
+  }
+  public editBufferInsertText(buffer: Pointer, text: string): void {
+    this.opentui.symbols.editBufferInsertText(buffer, text)
+  }
+  public editBufferDeleteChar(buffer: Pointer): void {
+    this.opentui.symbols.editBufferDeleteChar(buffer)
+  }
+  public editBufferDeleteCharBackward(buffer: Pointer): void {
+    this.opentui.symbols.editBufferDeleteCharBackward(buffer)
+  }
+  public editBufferDeleteRange(
     buffer: Pointer,
     startLine: number,
     startCol: number,
     endLine: number,
     endCol: number,
-  ) => void
-  editBufferNewLine!: (buffer: Pointer) => void
-  editBufferDeleteLine!: (buffer: Pointer) => void
-  editBufferMoveCursorLeft!: (buffer: Pointer) => void
-  editBufferMoveCursorRight!: (buffer: Pointer) => void
-  editBufferMoveCursorUp!: (buffer: Pointer) => void
-  editBufferMoveCursorDown!: (buffer: Pointer) => void
-  editBufferGotoLine!: (buffer: Pointer, line: number) => void
-  editBufferSetCursor!: (buffer: Pointer, line: number, col: number) => void
-  editBufferSetCursorToLineCol!: (buffer: Pointer, line: number, col: number) => void
-  editBufferSetCursorByOffset!: (buffer: Pointer, offset: number) => void
-  editBufferGetCursorPosition!: (buffer: Pointer) => LogicalCursor
-  editBufferGetId!: (buffer: Pointer) => number
-  editBufferGetTextBuffer!: (buffer: Pointer) => Pointer
-  editBufferDebugLogRope!: (buffer: Pointer) => void
-  editBufferUndo!: (buffer: Pointer, maxLength: number) => Uint8Array | null
-  editBufferRedo!: (buffer: Pointer, maxLength: number) => Uint8Array | null
-  editBufferCanUndo!: (buffer: Pointer) => boolean
-  editBufferCanRedo!: (buffer: Pointer) => boolean
-  editBufferClearHistory!: (buffer: Pointer) => void
-  editBufferClear!: (buffer: Pointer) => void
-  editBufferGetNextWordBoundary!: (buffer: Pointer) => { row: number; col: number; offset: number }
-  editBufferGetPrevWordBoundary!: (buffer: Pointer) => { row: number; col: number; offset: number }
-  editBufferGetEOL!: (buffer: Pointer) => { row: number; col: number; offset: number }
-  editBufferOffsetToPosition!: (buffer: Pointer, offset: number) => { row: number; col: number; offset: number } | null
-  editBufferPositionToOffset!: (buffer: Pointer, row: number, col: number) => number
-  editBufferGetLineStartOffset!: (buffer: Pointer, row: number) => number
-  editBufferGetTextRange!: (
+  ): void {
+    this.opentui.symbols.editBufferDeleteRange(buffer, startLine, startCol, endLine, endCol)
+  }
+  public editBufferNewLine(buffer: Pointer): void {
+    this.opentui.symbols.editBufferNewLine(buffer)
+  }
+  public editBufferDeleteLine(buffer: Pointer): void {
+    this.opentui.symbols.editBufferDeleteLine(buffer)
+  }
+  public editBufferMoveCursorLeft(buffer: Pointer): void {
+    this.opentui.symbols.editBufferMoveCursorLeft(buffer)
+  }
+  public editBufferMoveCursorRight(buffer: Pointer): void {
+    this.opentui.symbols.editBufferMoveCursorRight(buffer)
+  }
+  public editBufferMoveCursorUp(buffer: Pointer): void {
+    this.opentui.symbols.editBufferMoveCursorUp(buffer)
+  }
+  public editBufferMoveCursorDown(buffer: Pointer): void {
+    this.opentui.symbols.editBufferMoveCursorDown(buffer)
+  }
+  public editBufferGotoLine(buffer: Pointer, line: number): void {
+    this.opentui.symbols.editBufferGotoLine(buffer, line)
+  }
+  public editBufferSetCursor(buffer: Pointer, line: number, col: number): void {
+    this.opentui.symbols.editBufferSetCursor(buffer, line, col)
+  }
+  public editBufferSetCursorToLineCol(buffer: Pointer, line: number, col: number): void {
+    this.opentui.symbols.editBufferSetCursorToLineCol(buffer, line, col)
+  }
+  public editBufferSetCursorByOffset(buffer: Pointer, offset: number): void {
+    this.opentui.symbols.editBufferSetCursorByOffset(buffer, offset)
+  }
+  public editBufferGetCursorPosition(buffer: Pointer): LogicalCursor {
+    return this.opentui.symbols.editBufferGetCursorPosition(buffer)
+  }
+  public editBufferGetId(buffer: Pointer): number {
+    return this.opentui.symbols.editBufferGetId(buffer)
+  }
+  public editBufferGetTextBuffer(buffer: Pointer): Pointer {
+    return this.opentui.symbols.editBufferGetTextBuffer(buffer)
+  }
+  public editBufferDebugLogRope(buffer: Pointer): void {
+    this.opentui.symbols.editBufferDebugLogRope(buffer)
+  }
+  public editBufferUndo(buffer: Pointer, maxLength: number): Uint8Array | null {
+    const raw = this.opentui.symbols.editBufferUndo(buffer, maxLength)
+    return raw ? new Uint8Array(raw) : null
+  }
+  public editBufferRedo(buffer: Pointer, maxLength: number): Uint8Array | null {
+    const raw = this.opentui.symbols.editBufferRedo(buffer, maxLength)
+    return raw ? new Uint8Array(raw) : null
+  }
+  public editBufferCanUndo(buffer: Pointer): boolean {
+    return this.opentui.symbols.editBufferCanUndo(buffer)
+  }
+  public editBufferCanRedo(buffer: Pointer): boolean {
+    return this.opentui.symbols.editBufferCanRedo(buffer)
+  }
+  public editBufferClearHistory(buffer: Pointer): void {
+    this.opentui.symbols.editBufferClearHistory(buffer)
+  }
+  public editBufferClear(buffer: Pointer): void {
+    this.opentui.symbols.editBufferClear(buffer)
+  }
+  public editBufferGetNextWordBoundary(buffer: Pointer): LogicalCursor {
+    return this.opentui.symbols.editBufferGetNextWordBoundary(buffer)
+  }
+  public editBufferGetPrevWordBoundary(buffer: Pointer): LogicalCursor {
+    return this.opentui.symbols.editBufferGetPrevWordBoundary(buffer)
+  }
+  public editBufferGetEOL(buffer: Pointer): LogicalCursor {
+    return this.opentui.symbols.editBufferGetEOL(buffer)
+  }
+  public editBufferOffsetToPosition(buffer: Pointer, offset: number): LogicalCursor | null {
+    return this.opentui.symbols.editBufferOffsetToPosition(buffer, offset)
+  }
+  public editBufferPositionToOffset(buffer: Pointer, row: number, col: number): number {
+    return this.opentui.symbols.editBufferPositionToOffset(buffer, row, col)
+  }
+  public editBufferGetLineStartOffset(buffer: Pointer, row: number): number {
+    return this.opentui.symbols.editBufferGetLineStartOffset(buffer, row)
+  }
+  public editBufferGetTextRange(
     buffer: Pointer,
     startOffset: number,
     endOffset: number,
     maxLength: number,
-  ) => Uint8Array | null
-  editBufferGetTextRangeByCoords!: (
+  ): Uint8Array | null {
+    const raw = this.opentui.symbols.editBufferGetTextRange(buffer, startOffset, endOffset, maxLength)
+    return raw ? new Uint8Array(raw) : null
+  }
+  public editBufferGetTextRangeByCoords(
     buffer: Pointer,
     startRow: number,
     startCol: number,
     endRow: number,
     endCol: number,
     maxLength: number,
-  ) => Uint8Array | null
-  createEditorView!: (editBufferPtr: Pointer, viewportWidth: number, viewportHeight: number) => Pointer
-  destroyEditorView!: (view: Pointer) => void
-  editorViewSetViewportSize!: (view: Pointer, width: number, height: number) => void
-  editorViewSetViewport!: (
+  ): Uint8Array | null {
+    const raw = this.opentui.symbols.editBufferGetTextRangeByCoords(
+      buffer,
+      startRow,
+      startCol,
+      endRow,
+      endCol,
+      maxLength,
+    )
+    return raw ? new Uint8Array(raw) : null
+  }
+  public createEditorView(editBufferPtr: Pointer, viewportWidth: number, viewportHeight: number): Pointer {
+    const ptr = this.opentui.symbols.createEditorView(editBufferPtr, viewportWidth, viewportHeight)
+    if (!ptr) throw new Error("Failed to create EditorView")
+    return ptr
+  }
+  public destroyEditorView(view: Pointer): void {
+    this.opentui.symbols.destroyEditorView(view)
+  }
+  public editorViewSetViewportSize(view: Pointer, width: number, height: number): void {
+    this.opentui.symbols.editorViewSetViewportSize(view, width, height)
+  }
+  public editorViewSetViewport(
     view: Pointer,
     x: number,
     y: number,
     width: number,
     height: number,
     moveCursor: boolean,
-  ) => void
-  editorViewGetViewport!: (view: Pointer) => { offsetY: number; offsetX: number; height: number; width: number }
-  editorViewSetScrollMargin!: (view: Pointer, margin: number) => void
-  editorViewSetWrapMode!: (view: Pointer, mode: "none" | "char" | "word") => void
-  editorViewGetVirtualLineCount!: (view: Pointer) => number
-  editorViewGetTotalVirtualLineCount!: (view: Pointer) => number
-  editorViewGetTextBufferView!: (view: Pointer) => Pointer
-  editorViewSetSelection!: (
+  ): void {
+    this.opentui.symbols.editorViewSetViewport(view, x, y, width, height, moveCursor)
+  }
+  public editorViewGetViewport(view: Pointer): { offsetY: number; offsetX: number; height: number; width: number } {
+    return this.opentui.symbols.editorViewGetViewport(view)
+  }
+  public editorViewSetScrollMargin(view: Pointer, margin: number): void {
+    this.opentui.symbols.editorViewSetScrollMargin(view, margin)
+  }
+  public editorViewSetWrapMode(view: Pointer, mode: "none" | "char" | "word"): void {
+    const modeValue = mode === "none" ? 0 : mode === "char" ? 1 : 2
+    this.opentui.symbols.editorViewSetWrapMode(view, modeValue)
+  }
+  public editorViewGetVirtualLineCount(view: Pointer): number {
+    return this.opentui.symbols.editorViewGetVirtualLineCount(view)
+  }
+  public editorViewGetTotalVirtualLineCount(view: Pointer): number {
+    return this.opentui.symbols.editorViewGetTotalVirtualLineCount(view)
+  }
+  public editorViewGetTextBufferView(view: Pointer): Pointer {
+    return this.opentui.symbols.editorViewGetTextBufferView(view)
+  }
+  public editorViewSetSelection(
     view: Pointer,
     start: number,
     end: number,
     bgColor: RGBA | null,
     fgColor: RGBA | null,
-  ) => void
-  editorViewResetSelection!: (view: Pointer) => void
-  editorViewGetSelection!: (view: Pointer) => { start: number; end: number } | null
-  editorViewSetLocalSelection!: (
+  ): void {
+    this.opentui.symbols.editorViewSetSelection(view, start, end, bgColor?.buffer ?? null, fgColor?.buffer ?? null)
+  }
+  public editorViewResetSelection(view: Pointer): void {
+    this.opentui.symbols.editorViewResetSelection(view)
+  }
+  public editorViewGetSelection(view: Pointer): { start: number; end: number } | null {
+    return this.opentui.symbols.editorViewGetSelection(view)
+  }
+  public editorViewSetLocalSelection(
     view: Pointer,
     anchorX: number,
     anchorY: number,
@@ -1497,9 +1825,23 @@ export class NapiRenderLib implements RenderLib {
     fgColor: RGBA | null,
     updateCursor: boolean,
     followCursor: boolean,
-  ) => boolean
-  editorViewUpdateSelection!: (view: Pointer, end: number, bgColor: RGBA | null, fgColor: RGBA | null) => void
-  editorViewUpdateLocalSelection!: (
+  ): boolean {
+    return this.opentui.symbols.editorViewSetLocalSelection(
+      view,
+      anchorX,
+      anchorY,
+      focusX,
+      focusY,
+      bgColor?.buffer ?? null,
+      fgColor?.buffer ?? null,
+      updateCursor,
+      followCursor,
+    )
+  }
+  public editorViewUpdateSelection(view: Pointer, end: number, bgColor: RGBA | null, fgColor: RGBA | null): void {
+    this.opentui.symbols.editorViewUpdateSelection(view, end, bgColor?.buffer ?? null, fgColor?.buffer ?? null)
+  }
+  public editorViewUpdateLocalSelection(
     view: Pointer,
     anchorX: number,
     anchorY: number,
@@ -1509,29 +1851,84 @@ export class NapiRenderLib implements RenderLib {
     fgColor: RGBA | null,
     updateCursor: boolean,
     followCursor: boolean,
-  ) => boolean
-  editorViewResetLocalSelection!: (view: Pointer) => void
-  editorViewGetSelectedTextBytes!: (view: Pointer, maxLength: number) => Uint8Array | null
-  editorViewGetCursor!: (view: Pointer) => { row: number; col: number }
-  editorViewGetText!: (view: Pointer, maxLength: number) => Uint8Array | null
-  editorViewGetVisualCursor!: (view: Pointer) => VisualCursor
-  editorViewMoveUpVisual!: (view: Pointer) => void
-  editorViewMoveDownVisual!: (view: Pointer) => void
-  editorViewDeleteSelectedText!: (view: Pointer) => void
-  editorViewSetCursorByOffset!: (view: Pointer, offset: number) => void
-  editorViewGetNextWordBoundary!: (view: Pointer) => VisualCursor
-  editorViewGetPrevWordBoundary!: (view: Pointer) => VisualCursor
-  editorViewGetEOL!: (view: Pointer) => VisualCursor
-  editorViewGetVisualSOL!: (view: Pointer) => VisualCursor
-  editorViewGetVisualEOL!: (view: Pointer) => VisualCursor
-  editorViewGetLineInfo!: (view: Pointer) => LineInfo
-  editorViewGetLogicalLineInfo!: (view: Pointer) => LineInfo
-  editorViewSetPlaceholderStyledText!: (
+  ): boolean {
+    return this.opentui.symbols.editorViewUpdateLocalSelection(
+      view,
+      anchorX,
+      anchorY,
+      focusX,
+      focusY,
+      bgColor?.buffer ?? null,
+      fgColor?.buffer ?? null,
+      updateCursor,
+      followCursor,
+    )
+  }
+  public editorViewResetLocalSelection(view: Pointer): void {
+    this.opentui.symbols.editorViewResetLocalSelection(view)
+  }
+  public editorViewGetSelectedTextBytes(view: Pointer, maxLength: number): Uint8Array | null {
+    const raw = this.opentui.symbols.editorViewGetSelectedTextBytes(view, maxLength)
+    return raw ? new Uint8Array(raw) : null
+  }
+  public editorViewGetCursor(view: Pointer): { row: number; col: number } {
+    return this.opentui.symbols.editorViewGetCursor(view)
+  }
+  public editorViewGetText(view: Pointer, maxLength: number): Uint8Array | null {
+    const raw = this.opentui.symbols.editorViewGetText(view, maxLength)
+    return raw ? new Uint8Array(raw) : null
+  }
+  public editorViewGetVisualCursor(view: Pointer): VisualCursor {
+    return this.opentui.symbols.editorViewGetVisualCursor(view)
+  }
+  public editorViewMoveUpVisual(view: Pointer): void {
+    this.opentui.symbols.editorViewMoveUpVisual(view)
+  }
+  public editorViewMoveDownVisual(view: Pointer): void {
+    this.opentui.symbols.editorViewMoveDownVisual(view)
+  }
+  public editorViewDeleteSelectedText(view: Pointer): void {
+    this.opentui.symbols.editorViewDeleteSelectedText(view)
+  }
+  public editorViewSetCursorByOffset(view: Pointer, offset: number): void {
+    this.opentui.symbols.editorViewSetCursorByOffset(view, offset)
+  }
+  public editorViewGetNextWordBoundary(view: Pointer): VisualCursor {
+    return this.opentui.symbols.editorViewGetNextWordBoundary(view)
+  }
+  public editorViewGetPrevWordBoundary(view: Pointer): VisualCursor {
+    return this.opentui.symbols.editorViewGetPrevWordBoundary(view)
+  }
+  public editorViewGetEOL(view: Pointer): VisualCursor {
+    return this.opentui.symbols.editorViewGetEOL(view)
+  }
+  public editorViewGetVisualSOL(view: Pointer): VisualCursor {
+    return this.opentui.symbols.editorViewGetVisualSOL(view)
+  }
+  public editorViewGetVisualEOL(view: Pointer): VisualCursor {
+    return this.opentui.symbols.editorViewGetVisualEOL(view)
+  }
+  public editorViewGetLineInfo(view: Pointer): LineInfo {
+    return this.opentui.symbols.editorViewGetLineInfo(view)
+  }
+  public editorViewGetLogicalLineInfo(view: Pointer): LineInfo {
+    return this.opentui.symbols.editorViewGetLogicalLineInfo(view)
+  }
+  public editorViewSetPlaceholderStyledText(
     view: Pointer,
     chunks: Array<{ text: string; fg?: RGBA | null; bg?: RGBA | null; attributes?: number }>,
-  ) => void
-  editorViewSetTabIndicator!: (view: Pointer, indicator: number) => void
-  editorViewSetTabIndicatorColor!: (view: Pointer, color: RGBA) => void
+  ): void {
+    this.opentui.symbols.editorViewSetPlaceholderStyledText(
+      view,
+      chunks.filter((chunk) => chunk.text.length > 0),
+    )
+  }
+  public editorViewSetTabIndicator(view: Pointer, indicator: number): void {
+    this.opentui.symbols.editorViewSetTabIndicator(view, indicator)
+  }
+  public editorViewSetTabIndicatorColor(view: Pointer, color: RGBA): void {
+    this.opentui.symbols.editorViewSetTabIndicatorColor(view, color.buffer)
+  }
   getArenaAllocatedBytes!: () => number
   createSyntaxStyle!: () => Pointer
   destroySyntaxStyle!: (style: Pointer) => void

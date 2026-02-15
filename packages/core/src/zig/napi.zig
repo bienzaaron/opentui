@@ -7,6 +7,7 @@ const OptimizedBuffer = lib.OptimizedBuffer;
 const RGBA = lib.RGBA;
 const TextBuffer = lib.TextBuffer;
 const TextBufferView = lib.TextBufferView;
+const EditBuffer = lib.EditBuffer;
 const EditorView = lib.EditorView;
 const StyledChunk = lib.StyledChunk;
 const SyntaxStyle = lib.SyntaxStyle;
@@ -189,6 +190,24 @@ fn measureResultToValue(env: napi.Env, result: lib.ExternalMeasureResult) !napi.
     const out = try env.createObject();
     try out.setNamedProperty("lineCount", try napi.Value.createFrom(u32, env, result.line_count));
     try out.setNamedProperty("maxWidth", try napi.Value.createFrom(u32, env, result.max_width));
+    return out;
+}
+
+fn logicalCursorToValue(env: napi.Env, cursor: lib.ExternalLogicalCursor) !napi.Value {
+    const out = try env.createObject();
+    try out.setNamedProperty("row", try napi.Value.createFrom(u32, env, cursor.row));
+    try out.setNamedProperty("col", try napi.Value.createFrom(u32, env, cursor.col));
+    try out.setNamedProperty("offset", try napi.Value.createFrom(u32, env, cursor.offset));
+    return out;
+}
+
+fn visualCursorToValue(env: napi.Env, cursor: lib.ExternalVisualCursor) !napi.Value {
+    const out = try env.createObject();
+    try out.setNamedProperty("visualRow", try napi.Value.createFrom(u32, env, cursor.visual_row));
+    try out.setNamedProperty("visualCol", try napi.Value.createFrom(u32, env, cursor.visual_col));
+    try out.setNamedProperty("logicalRow", try napi.Value.createFrom(u32, env, cursor.logical_row));
+    try out.setNamedProperty("logicalCol", try napi.Value.createFrom(u32, env, cursor.logical_col));
+    try out.setNamedProperty("offset", try napi.Value.createFrom(u32, env, cursor.offset));
     return out;
 }
 
@@ -1550,6 +1569,571 @@ fn textBufferGetHighlightCount(env: napi.Env, buffer_ptr_val: napi.Value) !napi.
     return napi.Value.createFrom(u32, env, lib.textBufferGetHighlightCount(buffer_ptr));
 }
 
+fn createEditBuffer(env: napi.Env, width_method_val: napi.Value) !napi.Value {
+    const width_method = try extractU8(width_method_val);
+    return optionalPtrToValue(env, lib.createEditBuffer(width_method));
+}
+
+fn destroyEditBuffer(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.destroyEditBuffer(buffer_ptr);
+    return try env.getNull();
+}
+
+fn editBufferSetText(env: napi.Env, buffer_ptr_val: napi.Value, text_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    const text = try extractBytesAlloc(allocator, text_val);
+    defer allocator.free(text);
+    lib.editBufferSetText(buffer_ptr, text.ptr, text.len);
+    return try env.getNull();
+}
+
+fn editBufferSetTextFromMem(env: napi.Env, buffer_ptr_val: napi.Value, mem_id_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    const mem_id = try extractU8(mem_id_val);
+    lib.editBufferSetTextFromMem(buffer_ptr, mem_id);
+    return try env.getNull();
+}
+
+fn editBufferReplaceText(env: napi.Env, buffer_ptr_val: napi.Value, text_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    const text = try extractBytesAlloc(allocator, text_val);
+    defer allocator.free(text);
+    lib.editBufferReplaceText(buffer_ptr, text.ptr, text.len);
+    return try env.getNull();
+}
+
+fn editBufferReplaceTextFromMem(env: napi.Env, buffer_ptr_val: napi.Value, mem_id_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    const mem_id = try extractU8(mem_id_val);
+    lib.editBufferReplaceTextFromMem(buffer_ptr, mem_id);
+    return try env.getNull();
+}
+
+fn editBufferGetText(env: napi.Env, buffer_ptr_val: napi.Value, max_len_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    const max_len: usize = @intCast(try extractU32(max_len_val));
+    const out = try allocator.alloc(u8, max_len);
+    defer allocator.free(out);
+    const actual_len = lib.editBufferGetText(buffer_ptr, out.ptr, out.len);
+    if (actual_len == 0) return try env.getNull();
+    return bytesToArrayBuffer(env, out[0..actual_len]);
+}
+
+fn editBufferInsertChar(env: napi.Env, buffer_ptr_val: napi.Value, char_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    const char = try extractUtf8Alloc(allocator, char_val);
+    defer allocator.free(char);
+    lib.editBufferInsertChar(buffer_ptr, char.ptr, char.len);
+    return try env.getNull();
+}
+
+fn editBufferInsertText(env: napi.Env, buffer_ptr_val: napi.Value, text_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    const text = try extractUtf8Alloc(allocator, text_val);
+    defer allocator.free(text);
+    lib.editBufferInsertText(buffer_ptr, text.ptr, text.len);
+    return try env.getNull();
+}
+
+fn editBufferDeleteChar(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferDeleteChar(buffer_ptr);
+    return try env.getNull();
+}
+fn editBufferDeleteCharBackward(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferDeleteCharBackward(buffer_ptr);
+    return try env.getNull();
+}
+fn editBufferDeleteRange(env: napi.Env, buffer_ptr_val: napi.Value, s_row_val: napi.Value, s_col_val: napi.Value, e_row_val: napi.Value, e_col_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferDeleteRange(buffer_ptr, try extractU32(s_row_val), try extractU32(s_col_val), try extractU32(e_row_val), try extractU32(e_col_val));
+    return try env.getNull();
+}
+fn editBufferNewLine(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferNewLine(buffer_ptr);
+    return try env.getNull();
+}
+fn editBufferDeleteLine(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferDeleteLine(buffer_ptr);
+    return try env.getNull();
+}
+fn editBufferMoveCursorLeft(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferMoveCursorLeft(buffer_ptr);
+    return try env.getNull();
+}
+fn editBufferMoveCursorRight(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferMoveCursorRight(buffer_ptr);
+    return try env.getNull();
+}
+fn editBufferMoveCursorUp(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferMoveCursorUp(buffer_ptr);
+    return try env.getNull();
+}
+fn editBufferMoveCursorDown(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferMoveCursorDown(buffer_ptr);
+    return try env.getNull();
+}
+fn editBufferGotoLine(env: napi.Env, buffer_ptr_val: napi.Value, line_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferGotoLine(buffer_ptr, try extractU32(line_val));
+    return try env.getNull();
+}
+fn editBufferSetCursor(env: napi.Env, buffer_ptr_val: napi.Value, row_val: napi.Value, col_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferSetCursor(buffer_ptr, try extractU32(row_val), try extractU32(col_val));
+    return try env.getNull();
+}
+fn editBufferSetCursorToLineCol(env: napi.Env, buffer_ptr_val: napi.Value, row_val: napi.Value, col_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferSetCursorToLineCol(buffer_ptr, try extractU32(row_val), try extractU32(col_val));
+    return try env.getNull();
+}
+fn editBufferSetCursorByOffset(env: napi.Env, buffer_ptr_val: napi.Value, offset_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferSetCursorByOffset(buffer_ptr, try extractU32(offset_val));
+    return try env.getNull();
+}
+
+fn editBufferGetCursorPosition(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    var out: lib.ExternalLogicalCursor = undefined;
+    lib.editBufferGetCursorPosition(buffer_ptr, &out);
+    return logicalCursorToValue(env, out);
+}
+
+fn editBufferGetId(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    return napi.Value.createFrom(u32, env, lib.editBufferGetId(buffer_ptr));
+}
+fn editBufferGetTextBuffer(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    return ptrToValue(env, lib.editBufferGetTextBuffer(buffer_ptr));
+}
+fn editBufferDebugLogRope(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferDebugLogRope(buffer_ptr);
+    return try env.getNull();
+}
+
+fn editBufferUndo(env: napi.Env, buffer_ptr_val: napi.Value, max_len_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    const max_len: usize = @intCast(try extractU32(max_len_val));
+    const out = try allocator.alloc(u8, max_len);
+    defer allocator.free(out);
+    const actual_len = lib.editBufferUndo(buffer_ptr, out.ptr, out.len);
+    if (actual_len == 0) return try env.getNull();
+    return bytesToArrayBuffer(env, out[0..actual_len]);
+}
+
+fn editBufferRedo(env: napi.Env, buffer_ptr_val: napi.Value, max_len_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    const max_len: usize = @intCast(try extractU32(max_len_val));
+    const out = try allocator.alloc(u8, max_len);
+    defer allocator.free(out);
+    const actual_len = lib.editBufferRedo(buffer_ptr, out.ptr, out.len);
+    if (actual_len == 0) return try env.getNull();
+    return bytesToArrayBuffer(env, out[0..actual_len]);
+}
+
+fn editBufferCanUndo(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    return try env.getBoolean(lib.editBufferCanUndo(buffer_ptr));
+}
+fn editBufferCanRedo(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    return try env.getBoolean(lib.editBufferCanRedo(buffer_ptr));
+}
+fn editBufferClearHistory(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferClearHistory(buffer_ptr);
+    return try env.getNull();
+}
+fn editBufferClear(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    lib.editBufferClear(buffer_ptr);
+    return try env.getNull();
+}
+
+fn editBufferGetNextWordBoundary(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    var out: lib.ExternalLogicalCursor = undefined;
+    lib.editBufferGetNextWordBoundary(buffer_ptr, &out);
+    return logicalCursorToValue(env, out);
+}
+fn editBufferGetPrevWordBoundary(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    var out: lib.ExternalLogicalCursor = undefined;
+    lib.editBufferGetPrevWordBoundary(buffer_ptr, &out);
+    return logicalCursorToValue(env, out);
+}
+fn editBufferGetEOL(env: napi.Env, buffer_ptr_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    var out: lib.ExternalLogicalCursor = undefined;
+    lib.editBufferGetEOL(buffer_ptr, &out);
+    return logicalCursorToValue(env, out);
+}
+
+fn editBufferOffsetToPosition(env: napi.Env, buffer_ptr_val: napi.Value, offset_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    var out: lib.ExternalLogicalCursor = undefined;
+    const ok = lib.editBufferOffsetToPosition(buffer_ptr, try extractU32(offset_val), &out);
+    if (!ok) return try env.getNull();
+    return logicalCursorToValue(env, out);
+}
+
+fn editBufferPositionToOffset(env: napi.Env, buffer_ptr_val: napi.Value, row_val: napi.Value, col_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    return napi.Value.createFrom(u32, env, lib.editBufferPositionToOffset(buffer_ptr, try extractU32(row_val), try extractU32(col_val)));
+}
+fn editBufferGetLineStartOffset(env: napi.Env, buffer_ptr_val: napi.Value, row_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    return napi.Value.createFrom(u32, env, lib.editBufferGetLineStartOffset(buffer_ptr, try extractU32(row_val)));
+}
+
+fn editBufferGetTextRange(env: napi.Env, buffer_ptr_val: napi.Value, start_val: napi.Value, end_val: napi.Value, max_len_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    const out = try allocator.alloc(u8, @intCast(try extractU32(max_len_val)));
+    defer allocator.free(out);
+    const actual_len = lib.editBufferGetTextRange(buffer_ptr, try extractU32(start_val), try extractU32(end_val), out.ptr, out.len);
+    if (actual_len == 0) return try env.getNull();
+    return bytesToArrayBuffer(env, out[0..actual_len]);
+}
+
+fn editBufferGetTextRangeByCoords(env: napi.Env, buffer_ptr_val: napi.Value, s_row_val: napi.Value, s_col_val: napi.Value, e_row_val: napi.Value, e_col_val: napi.Value, max_len_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    const out = try allocator.alloc(u8, @intCast(try extractU32(max_len_val)));
+    defer allocator.free(out);
+    const actual_len = lib.editBufferGetTextRangeByCoords(buffer_ptr, try extractU32(s_row_val), try extractU32(s_col_val), try extractU32(e_row_val), try extractU32(e_col_val), out.ptr, out.len);
+    if (actual_len == 0) return try env.getNull();
+    return bytesToArrayBuffer(env, out[0..actual_len]);
+}
+
+fn createEditorView(env: napi.Env, buffer_ptr_val: napi.Value, width_val: napi.Value, height_val: napi.Value) !napi.Value {
+    const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
+    return optionalPtrToValue(env, lib.createEditorView(buffer_ptr, try extractU32(width_val), try extractU32(height_val)));
+}
+
+fn destroyEditorView(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    lib.destroyEditorView(view_ptr);
+    return try env.getNull();
+}
+fn editorViewSetViewportSize(env: napi.Env, view_ptr_val: napi.Value, width_val: napi.Value, height_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    lib.editorViewSetViewportSize(view_ptr, try extractU32(width_val), try extractU32(height_val));
+    return try env.getNull();
+}
+fn editorViewSetViewport(env: napi.Env, view_ptr_val: napi.Value, x_val: napi.Value, y_val: napi.Value, width_val: napi.Value, height_val: napi.Value, move_cursor_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    lib.editorViewSetViewport(view_ptr, try extractU32(x_val), try extractU32(y_val), try extractU32(width_val), try extractU32(height_val), try extractBool(move_cursor_val));
+    return try env.getNull();
+}
+
+fn editorViewGetViewport(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    var x: u32 = 0;
+    var y: u32 = 0;
+    var width: u32 = 0;
+    var height: u32 = 0;
+    _ = lib.editorViewGetViewport(view_ptr, &x, &y, &width, &height);
+    const out = try env.createObject();
+    try out.setNamedProperty("offsetX", try napi.Value.createFrom(u32, env, x));
+    try out.setNamedProperty("offsetY", try napi.Value.createFrom(u32, env, y));
+    try out.setNamedProperty("width", try napi.Value.createFrom(u32, env, width));
+    try out.setNamedProperty("height", try napi.Value.createFrom(u32, env, height));
+    return out;
+}
+
+fn editorViewSetScrollMargin(env: napi.Env, view_ptr_val: napi.Value, margin_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    lib.editorViewSetScrollMargin(view_ptr, @floatCast(try extractF64(margin_val)));
+    return try env.getNull();
+}
+fn editorViewSetWrapMode(env: napi.Env, view_ptr_val: napi.Value, mode_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    lib.editorViewSetWrapMode(view_ptr, try extractU8(mode_val));
+    return try env.getNull();
+}
+fn editorViewGetVirtualLineCount(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    return napi.Value.createFrom(u32, env, lib.editorViewGetVirtualLineCount(view_ptr));
+}
+fn editorViewGetTotalVirtualLineCount(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    return napi.Value.createFrom(u32, env, lib.editorViewGetTotalVirtualLineCount(view_ptr));
+}
+fn editorViewGetTextBufferView(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    return ptrToValue(env, lib.editorViewGetTextBufferView(view_ptr));
+}
+
+fn editorViewSetSelection(env: napi.Env, view_ptr_val: napi.Value, start_val: napi.Value, end_val: napi.Value, bg_val: napi.Value, fg_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    const bg_opt = try optionalRgbaFromValue(bg_val);
+    const fg_opt = try optionalRgbaFromValue(fg_val);
+    var bg_storage: RGBA = undefined;
+    var fg_storage: RGBA = undefined;
+    const bg_ptr: ?[*]const f32 = if (bg_opt) |bg| blk: {
+        bg_storage = bg;
+        break :blk @as([*]const f32, @ptrCast(&bg_storage));
+    } else null;
+    const fg_ptr: ?[*]const f32 = if (fg_opt) |fg| blk: {
+        fg_storage = fg;
+        break :blk @as([*]const f32, @ptrCast(&fg_storage));
+    } else null;
+    lib.editorViewSetSelection(view_ptr, try extractU32(start_val), try extractU32(end_val), bg_ptr, fg_ptr);
+    return try env.getNull();
+}
+
+fn editorViewResetSelection(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    lib.editorViewResetSelection(view_ptr);
+    return try env.getNull();
+}
+fn editorViewGetSelection(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    const packed_sel = lib.editorViewGetSelection(view_ptr);
+    if (packed_sel == std.math.maxInt(u64)) return try env.getNull();
+    const out = try env.createObject();
+    try out.setNamedProperty("start", try napi.Value.createFrom(u32, env, @intCast((packed_sel >> 32) & 0xffff_ffff)));
+    try out.setNamedProperty("end", try napi.Value.createFrom(u32, env, @intCast(packed_sel & 0xffff_ffff)));
+    return out;
+}
+
+fn editorViewSetLocalSelection(env: napi.Env, view_ptr_val: napi.Value, ax: napi.Value, ay: napi.Value, fx: napi.Value, fy: napi.Value, bg_val: napi.Value, fg_val: napi.Value, update_cursor_val: napi.Value, follow_cursor_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    const bg_opt = try optionalRgbaFromValue(bg_val);
+    const fg_opt = try optionalRgbaFromValue(fg_val);
+    var bg_storage: RGBA = undefined;
+    var fg_storage: RGBA = undefined;
+    const bg_ptr: ?[*]const f32 = if (bg_opt) |bg| blk: {
+        bg_storage = bg;
+        break :blk @as([*]const f32, @ptrCast(&bg_storage));
+    } else null;
+    const fg_ptr: ?[*]const f32 = if (fg_opt) |fg| blk: {
+        fg_storage = fg;
+        break :blk @as([*]const f32, @ptrCast(&fg_storage));
+    } else null;
+    const ok = lib.editorViewSetLocalSelection(view_ptr, try extractI32(ax), try extractI32(ay), try extractI32(fx), try extractI32(fy), bg_ptr, fg_ptr, try extractBool(update_cursor_val), try extractBool(follow_cursor_val));
+    return try env.getBoolean(ok);
+}
+
+fn editorViewUpdateSelection(env: napi.Env, view_ptr_val: napi.Value, end_val: napi.Value, bg_val: napi.Value, fg_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    const bg_opt = try optionalRgbaFromValue(bg_val);
+    const fg_opt = try optionalRgbaFromValue(fg_val);
+    var bg_storage: RGBA = undefined;
+    var fg_storage: RGBA = undefined;
+    const bg_ptr: ?[*]const f32 = if (bg_opt) |bg| blk: {
+        bg_storage = bg;
+        break :blk @as([*]const f32, @ptrCast(&bg_storage));
+    } else null;
+    const fg_ptr: ?[*]const f32 = if (fg_opt) |fg| blk: {
+        fg_storage = fg;
+        break :blk @as([*]const f32, @ptrCast(&fg_storage));
+    } else null;
+    lib.editorViewUpdateSelection(view_ptr, try extractU32(end_val), bg_ptr, fg_ptr);
+    return try env.getNull();
+}
+
+fn editorViewUpdateLocalSelection(env: napi.Env, view_ptr_val: napi.Value, ax: napi.Value, ay: napi.Value, fx: napi.Value, fy: napi.Value, bg_val: napi.Value, fg_val: napi.Value, update_cursor_val: napi.Value, follow_cursor_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    const bg_opt = try optionalRgbaFromValue(bg_val);
+    const fg_opt = try optionalRgbaFromValue(fg_val);
+    var bg_storage: RGBA = undefined;
+    var fg_storage: RGBA = undefined;
+    const bg_ptr: ?[*]const f32 = if (bg_opt) |bg| blk: {
+        bg_storage = bg;
+        break :blk @as([*]const f32, @ptrCast(&bg_storage));
+    } else null;
+    const fg_ptr: ?[*]const f32 = if (fg_opt) |fg| blk: {
+        fg_storage = fg;
+        break :blk @as([*]const f32, @ptrCast(&fg_storage));
+    } else null;
+    const ok = lib.editorViewUpdateLocalSelection(view_ptr, try extractI32(ax), try extractI32(ay), try extractI32(fx), try extractI32(fy), bg_ptr, fg_ptr, try extractBool(update_cursor_val), try extractBool(follow_cursor_val));
+    return try env.getBoolean(ok);
+}
+
+fn editorViewResetLocalSelection(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    lib.editorViewResetLocalSelection(view_ptr);
+    return try env.getNull();
+}
+fn editorViewGetSelectedTextBytes(env: napi.Env, view_ptr_val: napi.Value, max_len_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    const out = try allocator.alloc(u8, @intCast(try extractU32(max_len_val)));
+    defer allocator.free(out);
+    const len = lib.editorViewGetSelectedTextBytes(view_ptr, out.ptr, out.len);
+    if (len == 0) return try env.getNull();
+    return bytesToArrayBuffer(env, out[0..len]);
+}
+
+fn editorViewGetCursor(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    var row: u32 = 0;
+    var col: u32 = 0;
+    lib.editorViewGetCursor(view_ptr, &row, &col);
+    const out = try env.createObject();
+    try out.setNamedProperty("row", try napi.Value.createFrom(u32, env, row));
+    try out.setNamedProperty("col", try napi.Value.createFrom(u32, env, col));
+    return out;
+}
+
+fn editorViewGetText(env: napi.Env, view_ptr_val: napi.Value, max_len_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    const out = try allocator.alloc(u8, @intCast(try extractU32(max_len_val)));
+    defer allocator.free(out);
+    const len = lib.editorViewGetText(view_ptr, out.ptr, out.len);
+    if (len == 0) return try env.getNull();
+    return bytesToArrayBuffer(env, out[0..len]);
+}
+fn editorViewGetVisualCursor(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    var out: lib.ExternalVisualCursor = undefined;
+    lib.editorViewGetVisualCursor(view_ptr, &out);
+    return visualCursorToValue(env, out);
+}
+fn editorViewMoveUpVisual(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    lib.editorViewMoveUpVisual(view_ptr);
+    return try env.getNull();
+}
+fn editorViewMoveDownVisual(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    lib.editorViewMoveDownVisual(view_ptr);
+    return try env.getNull();
+}
+fn editorViewDeleteSelectedText(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    lib.editorViewDeleteSelectedText(view_ptr);
+    return try env.getNull();
+}
+fn editorViewSetCursorByOffset(env: napi.Env, view_ptr_val: napi.Value, offset_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    lib.editorViewSetCursorByOffset(view_ptr, try extractU32(offset_val));
+    return try env.getNull();
+}
+fn editorViewGetNextWordBoundary(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    var out: lib.ExternalVisualCursor = undefined;
+    lib.editorViewGetNextWordBoundary(view_ptr, &out);
+    return visualCursorToValue(env, out);
+}
+fn editorViewGetPrevWordBoundary(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    var out: lib.ExternalVisualCursor = undefined;
+    lib.editorViewGetPrevWordBoundary(view_ptr, &out);
+    return visualCursorToValue(env, out);
+}
+fn editorViewGetEOL(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    var out: lib.ExternalVisualCursor = undefined;
+    lib.editorViewGetEOL(view_ptr, &out);
+    return visualCursorToValue(env, out);
+}
+fn editorViewGetVisualSOL(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    var out: lib.ExternalVisualCursor = undefined;
+    lib.editorViewGetVisualSOL(view_ptr, &out);
+    return visualCursorToValue(env, out);
+}
+fn editorViewGetVisualEOL(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    var out: lib.ExternalVisualCursor = undefined;
+    lib.editorViewGetVisualEOL(view_ptr, &out);
+    return visualCursorToValue(env, out);
+}
+fn editorViewGetLineInfo(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    var out: lib.ExternalLineInfo = undefined;
+    lib.editorViewGetLineInfoDirect(view_ptr, &out);
+    return lineInfoToValue(env, out);
+}
+fn editorViewGetLogicalLineInfo(env: napi.Env, view_ptr_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    var out: lib.ExternalLineInfo = undefined;
+    lib.editorViewGetLogicalLineInfoDirect(view_ptr, &out);
+    return lineInfoToValue(env, out);
+}
+
+fn editorViewSetPlaceholderStyledText(env: napi.Env, view_ptr_val: napi.Value, chunks_val: napi.Value) !napi.Value {
+    const allocator = std.heap.page_allocator;
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    const chunk_count: usize = @intCast(try chunks_val.getArrayLength());
+    if (chunk_count == 0) {
+        lib.editorViewSetPlaceholderStyledText(view_ptr, &[_]StyledChunk{}, 0);
+        return try env.getNull();
+    }
+    const chunks = try allocator.alloc(StyledChunk, chunk_count);
+    defer allocator.free(chunks);
+    const fg_storage = try allocator.alloc(RGBA, chunk_count);
+    defer allocator.free(fg_storage);
+    const bg_storage = try allocator.alloc(RGBA, chunk_count);
+    defer allocator.free(bg_storage);
+    const has_fg = try allocator.alloc(bool, chunk_count);
+    defer allocator.free(has_fg);
+    @memset(has_fg, false);
+    const has_bg = try allocator.alloc(bool, chunk_count);
+    defer allocator.free(has_bg);
+    @memset(has_bg, false);
+    const text_storage = try allocator.alloc([]u8, chunk_count);
+    var text_storage_len: usize = 0;
+    defer {
+        for (0..text_storage_len) |idx| allocator.free(text_storage[idx]);
+        allocator.free(text_storage);
+    }
+    for (0..chunk_count) |i| {
+        const chunk_val = try chunks_val.getElement(@intCast(i));
+        const text_bytes = try extractUtf8Alloc(allocator, try chunk_val.getNamedProperty("text"));
+        text_storage[text_storage_len] = text_bytes;
+        text_storage_len += 1;
+        var attributes: u32 = 0;
+        if (try chunk_val.hasNamedProperty("attributes")) attributes = try (try (try chunk_val.getNamedProperty("attributes")).coerceTo(.Number)).getValue(u32);
+        if (try chunk_val.hasNamedProperty("fg")) if (try optionalRgbaFromValue(try chunk_val.getNamedProperty("fg"))) |fg| {
+            fg_storage[i] = fg;
+            has_fg[i] = true;
+        };
+        if (try chunk_val.hasNamedProperty("bg")) if (try optionalRgbaFromValue(try chunk_val.getNamedProperty("bg"))) |bg| {
+            bg_storage[i] = bg;
+            has_bg[i] = true;
+        };
+        chunks[i] = .{ .text_ptr = text_bytes.ptr, .text_len = text_bytes.len, .fg_ptr = if (has_fg[i]) @as([*]const f32, @ptrCast(&fg_storage[i])) else null, .bg_ptr = if (has_bg[i]) @as([*]const f32, @ptrCast(&bg_storage[i])) else null, .attributes = attributes };
+    }
+    lib.editorViewSetPlaceholderStyledText(view_ptr, chunks.ptr, chunks.len);
+    return try env.getNull();
+}
+
+fn editorViewSetTabIndicator(env: napi.Env, view_ptr_val: napi.Value, indicator_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    lib.editorViewSetTabIndicator(view_ptr, try extractU32(indicator_val));
+    return try env.getNull();
+}
+fn editorViewSetTabIndicatorColor(env: napi.Env, view_ptr_val: napi.Value, color_val: napi.Value) !napi.Value {
+    const view_ptr = try valueToPtr(*EditorView, view_ptr_val);
+    const color = try rgbaFromValue(color_val);
+    lib.editorViewSetTabIndicatorColor(view_ptr, @as([*]const f32, @ptrCast(&color)));
+    return try env.getNull();
+}
+
 fn init(env: napi.Env, exports: napi.Value) !napi.Value {
     try exports.setNamedProperty("setLogCallback", try env.createFunction(setLogCallback, null));
     try exports.setNamedProperty("setEventCallback", try env.createFunction(setEventCallback, null));
@@ -1652,6 +2236,81 @@ fn init(env: napi.Env, exports: napi.Value) !napi.Value {
     try exports.setNamedProperty("textBufferSetSyntaxStyle", try env.createFunction(textBufferSetSyntaxStyle, null));
     try exports.setNamedProperty("textBufferGetLineHighlights", try env.createFunction(textBufferGetLineHighlights, null));
     try exports.setNamedProperty("textBufferGetHighlightCount", try env.createFunction(textBufferGetHighlightCount, null));
+    try exports.setNamedProperty("createEditBuffer", try env.createFunction(createEditBuffer, null));
+    try exports.setNamedProperty("destroyEditBuffer", try env.createFunction(destroyEditBuffer, null));
+    try exports.setNamedProperty("editBufferSetText", try env.createFunction(editBufferSetText, null));
+    try exports.setNamedProperty("editBufferSetTextFromMem", try env.createFunction(editBufferSetTextFromMem, null));
+    try exports.setNamedProperty("editBufferReplaceText", try env.createFunction(editBufferReplaceText, null));
+    try exports.setNamedProperty("editBufferReplaceTextFromMem", try env.createFunction(editBufferReplaceTextFromMem, null));
+    try exports.setNamedProperty("editBufferGetText", try env.createFunction(editBufferGetText, null));
+    try exports.setNamedProperty("editBufferInsertChar", try env.createFunction(editBufferInsertChar, null));
+    try exports.setNamedProperty("editBufferInsertText", try env.createFunction(editBufferInsertText, null));
+    try exports.setNamedProperty("editBufferDeleteChar", try env.createFunction(editBufferDeleteChar, null));
+    try exports.setNamedProperty("editBufferDeleteCharBackward", try env.createFunction(editBufferDeleteCharBackward, null));
+    try exports.setNamedProperty("editBufferDeleteRange", try env.createFunction(editBufferDeleteRange, null));
+    try exports.setNamedProperty("editBufferNewLine", try env.createFunction(editBufferNewLine, null));
+    try exports.setNamedProperty("editBufferDeleteLine", try env.createFunction(editBufferDeleteLine, null));
+    try exports.setNamedProperty("editBufferMoveCursorLeft", try env.createFunction(editBufferMoveCursorLeft, null));
+    try exports.setNamedProperty("editBufferMoveCursorRight", try env.createFunction(editBufferMoveCursorRight, null));
+    try exports.setNamedProperty("editBufferMoveCursorUp", try env.createFunction(editBufferMoveCursorUp, null));
+    try exports.setNamedProperty("editBufferMoveCursorDown", try env.createFunction(editBufferMoveCursorDown, null));
+    try exports.setNamedProperty("editBufferGotoLine", try env.createFunction(editBufferGotoLine, null));
+    try exports.setNamedProperty("editBufferSetCursor", try env.createFunction(editBufferSetCursor, null));
+    try exports.setNamedProperty("editBufferSetCursorToLineCol", try env.createFunction(editBufferSetCursorToLineCol, null));
+    try exports.setNamedProperty("editBufferSetCursorByOffset", try env.createFunction(editBufferSetCursorByOffset, null));
+    try exports.setNamedProperty("editBufferGetCursorPosition", try env.createFunction(editBufferGetCursorPosition, null));
+    try exports.setNamedProperty("editBufferGetId", try env.createFunction(editBufferGetId, null));
+    try exports.setNamedProperty("editBufferGetTextBuffer", try env.createFunction(editBufferGetTextBuffer, null));
+    try exports.setNamedProperty("editBufferDebugLogRope", try env.createFunction(editBufferDebugLogRope, null));
+    try exports.setNamedProperty("editBufferUndo", try env.createFunction(editBufferUndo, null));
+    try exports.setNamedProperty("editBufferRedo", try env.createFunction(editBufferRedo, null));
+    try exports.setNamedProperty("editBufferCanUndo", try env.createFunction(editBufferCanUndo, null));
+    try exports.setNamedProperty("editBufferCanRedo", try env.createFunction(editBufferCanRedo, null));
+    try exports.setNamedProperty("editBufferClearHistory", try env.createFunction(editBufferClearHistory, null));
+    try exports.setNamedProperty("editBufferClear", try env.createFunction(editBufferClear, null));
+    try exports.setNamedProperty("editBufferGetNextWordBoundary", try env.createFunction(editBufferGetNextWordBoundary, null));
+    try exports.setNamedProperty("editBufferGetPrevWordBoundary", try env.createFunction(editBufferGetPrevWordBoundary, null));
+    try exports.setNamedProperty("editBufferGetEOL", try env.createFunction(editBufferGetEOL, null));
+    try exports.setNamedProperty("editBufferOffsetToPosition", try env.createFunction(editBufferOffsetToPosition, null));
+    try exports.setNamedProperty("editBufferPositionToOffset", try env.createFunction(editBufferPositionToOffset, null));
+    try exports.setNamedProperty("editBufferGetLineStartOffset", try env.createFunction(editBufferGetLineStartOffset, null));
+    try exports.setNamedProperty("editBufferGetTextRange", try env.createFunction(editBufferGetTextRange, null));
+    try exports.setNamedProperty("editBufferGetTextRangeByCoords", try env.createFunction(editBufferGetTextRangeByCoords, null));
+    try exports.setNamedProperty("createEditorView", try env.createFunction(createEditorView, null));
+    try exports.setNamedProperty("destroyEditorView", try env.createFunction(destroyEditorView, null));
+    try exports.setNamedProperty("editorViewSetViewportSize", try env.createFunction(editorViewSetViewportSize, null));
+    try exports.setNamedProperty("editorViewSetViewport", try env.createFunction(editorViewSetViewport, null));
+    try exports.setNamedProperty("editorViewGetViewport", try env.createFunction(editorViewGetViewport, null));
+    try exports.setNamedProperty("editorViewSetScrollMargin", try env.createFunction(editorViewSetScrollMargin, null));
+    try exports.setNamedProperty("editorViewSetWrapMode", try env.createFunction(editorViewSetWrapMode, null));
+    try exports.setNamedProperty("editorViewGetVirtualLineCount", try env.createFunction(editorViewGetVirtualLineCount, null));
+    try exports.setNamedProperty("editorViewGetTotalVirtualLineCount", try env.createFunction(editorViewGetTotalVirtualLineCount, null));
+    try exports.setNamedProperty("editorViewGetTextBufferView", try env.createFunction(editorViewGetTextBufferView, null));
+    try exports.setNamedProperty("editorViewSetSelection", try env.createFunction(editorViewSetSelection, null));
+    try exports.setNamedProperty("editorViewResetSelection", try env.createFunction(editorViewResetSelection, null));
+    try exports.setNamedProperty("editorViewGetSelection", try env.createFunction(editorViewGetSelection, null));
+    try exports.setNamedProperty("editorViewSetLocalSelection", try env.createFunction(editorViewSetLocalSelection, null));
+    try exports.setNamedProperty("editorViewUpdateSelection", try env.createFunction(editorViewUpdateSelection, null));
+    try exports.setNamedProperty("editorViewUpdateLocalSelection", try env.createFunction(editorViewUpdateLocalSelection, null));
+    try exports.setNamedProperty("editorViewResetLocalSelection", try env.createFunction(editorViewResetLocalSelection, null));
+    try exports.setNamedProperty("editorViewGetSelectedTextBytes", try env.createFunction(editorViewGetSelectedTextBytes, null));
+    try exports.setNamedProperty("editorViewGetCursor", try env.createFunction(editorViewGetCursor, null));
+    try exports.setNamedProperty("editorViewGetText", try env.createFunction(editorViewGetText, null));
+    try exports.setNamedProperty("editorViewGetVisualCursor", try env.createFunction(editorViewGetVisualCursor, null));
+    try exports.setNamedProperty("editorViewMoveUpVisual", try env.createFunction(editorViewMoveUpVisual, null));
+    try exports.setNamedProperty("editorViewMoveDownVisual", try env.createFunction(editorViewMoveDownVisual, null));
+    try exports.setNamedProperty("editorViewDeleteSelectedText", try env.createFunction(editorViewDeleteSelectedText, null));
+    try exports.setNamedProperty("editorViewSetCursorByOffset", try env.createFunction(editorViewSetCursorByOffset, null));
+    try exports.setNamedProperty("editorViewGetNextWordBoundary", try env.createFunction(editorViewGetNextWordBoundary, null));
+    try exports.setNamedProperty("editorViewGetPrevWordBoundary", try env.createFunction(editorViewGetPrevWordBoundary, null));
+    try exports.setNamedProperty("editorViewGetEOL", try env.createFunction(editorViewGetEOL, null));
+    try exports.setNamedProperty("editorViewGetVisualSOL", try env.createFunction(editorViewGetVisualSOL, null));
+    try exports.setNamedProperty("editorViewGetVisualEOL", try env.createFunction(editorViewGetVisualEOL, null));
+    try exports.setNamedProperty("editorViewGetLineInfo", try env.createFunction(editorViewGetLineInfo, null));
+    try exports.setNamedProperty("editorViewGetLogicalLineInfo", try env.createFunction(editorViewGetLogicalLineInfo, null));
+    try exports.setNamedProperty("editorViewSetPlaceholderStyledText", try env.createFunction(editorViewSetPlaceholderStyledText, null));
+    try exports.setNamedProperty("editorViewSetTabIndicator", try env.createFunction(editorViewSetTabIndicator, null));
+    try exports.setNamedProperty("editorViewSetTabIndicatorColor", try env.createFunction(editorViewSetTabIndicatorColor, null));
     try exports.setNamedProperty("resizeRenderer", try env.createFunction(resizeRenderer, null));
     try exports.setNamedProperty("setCursorPosition", try env.createFunction(setCursorPosition, null));
     try exports.setNamedProperty("setCursorStyle", try env.createFunction(setCursorStyle, null));
