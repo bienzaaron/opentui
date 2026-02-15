@@ -520,7 +520,7 @@ export function resolveRenderLib(): RenderLib {
       opentuiLib =
         env.OPENTUI_FORCE_NAPI || !process.versions.bun
           ? new NapiRenderLib(opentuiLibPath)
-          : new FFIRenderLib(opentuiLib)
+          : new FFIRenderLib(opentuiLibPath)
     } catch (error) {
       throw new Error(
         `Failed to initialize OpenTUI render library: ${error instanceof Error ? error.message : "Unknown error"}`,
