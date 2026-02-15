@@ -1,13 +1,15 @@
 import { type Pointer } from "bun:ffi"
-import { registerEnvVar } from "./lib/env"
-import { isBunfsPath } from "./lib/bunfs"
+import EventEmitter from "node:events"
+import { createRequire } from "node:module"
 import { existsSync } from "node:fs"
+import { LogLevel } from "yoga-layout"
 import { OptimizedBuffer } from "./buffer"
+import { isBunfsPath } from "./lib/bunfs"
+import { registerEnvVar } from "./lib/env"
 import { RGBA } from "./lib"
 import { TextBuffer } from "./text-buffer"
-import { type CursorStyle, type WidthMethod, DebugOverlayCorner, type Highlight, type LineInfo } from "./types"
-import type { RenderLib, CursorState, LogicalCursor, VisualCursor } from "./zig"
-import { createRequire } from "node:module"
+import { type CursorStyle, DebugOverlayCorner, type Highlight, type LineInfo, type WidthMethod } from "./types"
+import type { CursorState, LogicalCursor, RenderLib, VisualCursor } from "./zig"
 
 const module = await import(`@opentui/core-${process.platform}-${process.arch}/index.ts`)
 let targetAddonPath = module.napiAddon
@@ -34,54 +36,175 @@ registerEnvVar({
   default: false,
 })
 
-// Global singleton state for NAPI tracing to prevent duplicate exit handlers
-// let globalTraceSymbols: Record<string, number[]> | null = null
-// let globalFFILogWriter: ReturnType<ReturnType<typeof Bun.file>["writer"]> | null = null
-// let exitHandlerRegistered = false
+type NativeLogCallback = ((level: number, message: string) => void) | null
+type NativeEventCallback = ((name: string, data: ArrayBuffer) => void) | null
 
-export function getOpenTUILib(libPath?: string) {
-  const resolvedAddonPath = libPath || targetAddonPath
+interface CursorStateRaw {
+  x: number
+  y: number
+  visible: boolean
+  style: number
+  blinking: boolean
+  r: number
+  g: number
+  b: number
+  a: number
+}
 
-  if (!existsSync(resolvedAddonPath)) {
-    throw new Error(`OpenTUI Node-API addon not found at ${resolvedAddonPath}\n`)
+interface NapiSymbols {
+  setLogCallback: (callback: NativeLogCallback) => void
+  setEventCallback: (callback: NativeEventCallback) => void
+
+  createRenderer: (width: number, height: number, testing: boolean, remote: boolean) => Pointer | null
+  destroyRenderer: (renderer: Pointer) => void
+  setUseThread: (renderer: Pointer, useThread: boolean) => void
+  setBackgroundColor: (renderer: Pointer, color: Float32Array) => void
+  setRenderOffset: (renderer: Pointer, offset: number) => void
+  updateStats: (renderer: Pointer, time: number, fps: number, frameCallbackTime: number) => void
+  updateMemoryStats: (renderer: Pointer, heapUsed: number, heapTotal: number, arrayBuffers: number) => void
+  render: (renderer: Pointer, force: boolean) => void
+  getNextBuffer: (renderer: Pointer) => Pointer | null
+  getCurrentBuffer: (renderer: Pointer) => Pointer | null
+  getBufferWidth: (buffer: Pointer) => number
+  getBufferHeight: (buffer: Pointer) => number
+  resizeRenderer: (renderer: Pointer, width: number, height: number) => void
+
+  setCursorPosition: (renderer: Pointer, x: number, y: number, visible: boolean) => void
+  setCursorStyle: (renderer: Pointer, style: string, blinking: boolean) => void
+  setCursorColor: (renderer: Pointer, color: Float32Array) => void
+  getCursorState: (renderer: Pointer) => CursorStateRaw
+  setDebugOverlay: (renderer: Pointer, enabled: boolean, corner: number) => void
+
+  clearTerminal: (renderer: Pointer) => void
+  setTerminalTitle: (renderer: Pointer, title: string) => void
+  setupTerminal: (renderer: Pointer, useAlternateScreen: boolean) => void
+  suspendRenderer: (renderer: Pointer) => void
+  resumeRenderer: (renderer: Pointer) => void
+  queryPixelResolution: (renderer: Pointer) => void
+  writeOut: (renderer: Pointer, data: Uint8Array) => void
+
+  bufferDrawChar: (
+    buffer: Pointer,
+    char: number,
+    x: number,
+    y: number,
+    fg: Float32Array,
+    bg: Float32Array,
+    attributes: number,
+  ) => void
+}
+
+const REQUIRED_SYMBOLS = [
+  "setLogCallback",
+  "setEventCallback",
+  "createRenderer",
+  "destroyRenderer",
+  "setUseThread",
+  "setBackgroundColor",
+  "setRenderOffset",
+  "updateStats",
+  "updateMemoryStats",
+  "render",
+  "getNextBuffer",
+  "getCurrentBuffer",
+  "getBufferWidth",
+  "getBufferHeight",
+  "resizeRenderer",
+  "setCursorPosition",
+  "setCursorStyle",
+  "setCursorColor",
+  "getCursorState",
+  "setDebugOverlay",
+  "clearTerminal",
+  "setTerminalTitle",
+  "setupTerminal",
+  "suspendRenderer",
+  "resumeRenderer",
+  "queryPixelResolution",
+  "writeOut",
+  "bufferDrawChar",
+] as const
+
+function assertSymbols(raw: unknown): asserts raw is NapiSymbols {
+  if (!raw || typeof raw !== "object") {
+    throw new Error("OpenTUI Node-API addon exports are invalid")
   }
 
-  // TODO any
+  for (const symbol of REQUIRED_SYMBOLS) {
+    if (typeof (raw as Record<string, unknown>)[symbol] !== "function") {
+      throw new Error(`OpenTUI Node-API addon is missing required symbol: ${symbol}`)
+    }
+  }
+}
+
+type OpenTUILib = { symbols: NapiSymbols }
+
+export function getOpenTUILib(libPath?: string): OpenTUILib {
+  const resolvedAddonPath = libPath || targetAddonPath
+  if (!existsSync(resolvedAddonPath)) {
+    throw new Error(`OpenTUI Node-API addon not found at ${resolvedAddonPath}`)
+  }
+
   const require = createRequire(import.meta.url)
-  const addon = require(resolvedAddonPath)
-  const rawSymbols = { symbols: addon }
-
-  // TODO debug symbols
-  //   if (env.OTUI_DEBUG_NAPI || env.OTUI_TRACE_NAPI) {
-  //     return {
-  //       symbols: convertToDebugSymbols(rawSymbols.symbols),
-  //     }
-  //   }
-
-  return rawSymbols
+  const addon: unknown = require(resolvedAddonPath)
+  assertSymbols(addon)
+  return { symbols: addon }
 }
 
 export class NapiRenderLib implements RenderLib {
-  private opentui: ReturnType<typeof getOpenTUILib>
+  private opentui: OpenTUILib
   public readonly encoder: TextEncoder = new TextEncoder()
   public readonly decoder: TextDecoder = new TextDecoder()
-  // private logCallbackWrapper: any // Store the FFI callback wrapper
-  // private eventCallbackWrapper: any // Store the FFI event callback wrapper
-  // private _nativeEvents: EventEmitter = new EventEmitter()
-  // private _anyEventHandlers: Array<(name: string, data: ArrayBuffer) => void> = []
+  private _nativeEvents: EventEmitter = new EventEmitter()
+  private _anyEventHandlers: Array<(name: string, data: ArrayBuffer) => void> = []
 
   constructor(libPath?: string) {
     this.opentui = getOpenTUILib(libPath)
     this.setupLogging()
     this.setupEventBus()
   }
-  private setupLogging() {}
-  private setLogCallback(callbarPtr: Pointer) {}
-  private setupEventBus() {}
-  private setEventCallback(callbarPtr: Pointer) {}
 
-  // starting with a really basic set of render lib functions
-  // that should let me render a simple example w/ NAPI
+  private setupLogging() {
+    const logCallback = (level: number, message: string) => {
+      switch (level) {
+        case LogLevel.Error:
+          console.error(message)
+          break
+        case LogLevel.Warn:
+          console.warn(message)
+          break
+        case LogLevel.Info:
+          console.info(message)
+          break
+        case LogLevel.Debug:
+          console.debug(message)
+          break
+        default:
+          console.log(message)
+      }
+    }
+    this.setLogCallback(logCallback)
+  }
+
+  private setLogCallback(callback: NativeLogCallback) {
+    this.opentui.symbols.setLogCallback(callback)
+  }
+
+  private setupEventBus() {
+    const eventCallback = (eventName: string, eventData: ArrayBuffer) => {
+      queueMicrotask(() => {
+        this._nativeEvents.emit(eventName, eventData)
+        for (const handler of this._anyEventHandlers) {
+          handler(eventName, eventData)
+        }
+      })
+    }
+    this.setEventCallback(eventCallback)
+  }
+
+  private setEventCallback(callback: NativeEventCallback) {
+    this.opentui.symbols.setEventCallback(callback)
+  }
 
   public createRenderer(width: number, height: number, options: { testing?: boolean; remote?: boolean } = {}) {
     const testing = options.testing ?? false
@@ -93,7 +216,27 @@ export class NapiRenderLib implements RenderLib {
     this.opentui.symbols.destroyRenderer(renderer)
   }
 
-  public render(renderer: Pointer, force: boolean) {
+  public setUseThread(renderer: Pointer, useThread: boolean): void {
+    this.opentui.symbols.setUseThread(renderer, useThread)
+  }
+
+  public setBackgroundColor(renderer: Pointer, color: RGBA): void {
+    this.opentui.symbols.setBackgroundColor(renderer, color.buffer)
+  }
+
+  public setRenderOffset(renderer: Pointer, offset: number): void {
+    this.opentui.symbols.setRenderOffset(renderer, offset)
+  }
+
+  public updateStats(renderer: Pointer, time: number, fps: number, frameCallbackTime: number): void {
+    this.opentui.symbols.updateStats(renderer, time, fps, frameCallbackTime)
+  }
+
+  public updateMemoryStats(renderer: Pointer, heapUsed: number, heapTotal: number, arrayBuffers: number): void {
+    this.opentui.symbols.updateMemoryStats(renderer, heapUsed, heapTotal, arrayBuffers)
+  }
+
+  public render(renderer: Pointer, force: boolean): void {
     this.opentui.symbols.render(renderer, force)
   }
 
@@ -105,8 +248,18 @@ export class NapiRenderLib implements RenderLib {
 
     const width = this.opentui.symbols.getBufferWidth(bufferPtr)
     const height = this.opentui.symbols.getBufferHeight(bufferPtr)
-
     return new OptimizedBuffer(this, bufferPtr, width, height, { id: "next buffer", widthMethod: "unicode" })
+  }
+
+  public getCurrentBuffer(renderer: Pointer): OptimizedBuffer {
+    const bufferPtr = this.opentui.symbols.getCurrentBuffer(renderer)
+    if (!bufferPtr) {
+      throw new Error("Failed to get current buffer")
+    }
+
+    const width = this.opentui.symbols.getBufferWidth(bufferPtr)
+    const height = this.opentui.symbols.getBufferHeight(bufferPtr)
+    return new OptimizedBuffer(this, bufferPtr, width, height, { id: "current buffer", widthMethod: "unicode" })
   }
 
   public getBufferWidth(buffer: Pointer): number {
@@ -115,6 +268,73 @@ export class NapiRenderLib implements RenderLib {
 
   public getBufferHeight(buffer: Pointer): number {
     return this.opentui.symbols.getBufferHeight(buffer)
+  }
+
+  public resizeRenderer(renderer: Pointer, width: number, height: number): void {
+    this.opentui.symbols.resizeRenderer(renderer, width, height)
+  }
+
+  public setCursorPosition(renderer: Pointer, x: number, y: number, visible: boolean): void {
+    this.opentui.symbols.setCursorPosition(renderer, x, y, visible)
+  }
+
+  public setCursorStyle(renderer: Pointer, style: CursorStyle, blinking: boolean): void {
+    this.opentui.symbols.setCursorStyle(renderer, style, blinking)
+  }
+
+  public setCursorColor(renderer: Pointer, color: RGBA): void {
+    this.opentui.symbols.setCursorColor(renderer, color.buffer)
+  }
+
+  public getCursorState(renderer: Pointer): CursorState {
+    const raw = this.opentui.symbols.getCursorState(renderer)
+    const styleMap: Record<number, CursorStyle> = {
+      0: "block",
+      1: "line",
+      2: "underline",
+    }
+
+    return {
+      x: raw.x,
+      y: raw.y,
+      visible: raw.visible,
+      style: styleMap[raw.style] || "block",
+      blinking: raw.blinking,
+      color: RGBA.fromValues(raw.r, raw.g, raw.b, raw.a),
+    }
+  }
+
+  public setDebugOverlay(renderer: Pointer, enabled: boolean, corner: DebugOverlayCorner): void {
+    this.opentui.symbols.setDebugOverlay(renderer, enabled, corner)
+  }
+
+  public clearTerminal(renderer: Pointer): void {
+    this.opentui.symbols.clearTerminal(renderer)
+  }
+
+  public setTerminalTitle(renderer: Pointer, title: string): void {
+    this.opentui.symbols.setTerminalTitle(renderer, title)
+  }
+
+  public setupTerminal(renderer: Pointer, useAlternateScreen: boolean): void {
+    this.opentui.symbols.setupTerminal(renderer, useAlternateScreen)
+  }
+
+  public suspendRenderer(renderer: Pointer): void {
+    this.opentui.symbols.suspendRenderer(renderer)
+  }
+
+  public resumeRenderer(renderer: Pointer): void {
+    this.opentui.symbols.resumeRenderer(renderer)
+  }
+
+  public queryPixelResolution(renderer: Pointer): void {
+    this.opentui.symbols.queryPixelResolution(renderer)
+  }
+
+  public writeOut(renderer: Pointer, data: string | Uint8Array): void {
+    const bytes = typeof data === "string" ? this.encoder.encode(data) : data
+    this.opentui.symbols.writeOut(renderer, bytes)
   }
 
   public bufferDrawChar(
@@ -129,18 +349,22 @@ export class NapiRenderLib implements RenderLib {
     this.opentui.symbols.bufferDrawChar(buffer, char, x, y, fg.buffer, bg.buffer, attributes)
   }
 
-  // TODO - implement later
+  public onNativeEvent(name: string, handler: (data: ArrayBuffer) => void): void {
+    this._nativeEvents.on(name, handler)
+  }
 
-  // createRenderer: (width: number, height: number, options?: { testing?: boolean; remote?: boolean }) => Pointer | null
-  // destroyRenderer!: (renderer: Pointer) => void
-  setUseThread!: (renderer: Pointer, useThread: boolean) => void
-  setBackgroundColor!: (renderer: Pointer, color: RGBA) => void
-  setRenderOffset!: (renderer: Pointer, offset: number) => void
-  updateStats!: (renderer: Pointer, time: number, fps: number, frameCallbackTime: number) => void
-  updateMemoryStats!: (renderer: Pointer, heapUsed: number, heapTotal: number, arrayBuffers: number) => void
-  // render!: (renderer: Pointer, force: boolean) => void
-  // getNextBuffer!: (renderer: Pointer) => OptimizedBuffer
-  getCurrentBuffer!: (renderer: Pointer) => OptimizedBuffer
+  public onceNativeEvent(name: string, handler: (data: ArrayBuffer) => void): void {
+    this._nativeEvents.once(name, handler)
+  }
+
+  public offNativeEvent(name: string, handler: (data: ArrayBuffer) => void): void {
+    this._nativeEvents.off(name, handler)
+  }
+
+  public onAnyNativeEvent(handler: (name: string, data: ArrayBuffer) => void): void {
+    this._anyEventHandlers.push(handler)
+  }
+
   createOptimizedBuffer!: (
     width: number,
     height: number,
@@ -159,8 +383,6 @@ export class NapiRenderLib implements RenderLib {
     sourceWidth?: number,
     sourceHeight?: number,
   ) => void
-  // getBufferWidth!: (buffer: Pointer) => number
-  // getBufferHeight!: (buffer: Pointer) => number
   bufferClear!: (buffer: Pointer, color: RGBA) => void
   bufferGetCharPtr!: (buffer: Pointer) => Pointer
   bufferGetFgPtr!: (buffer: Pointer) => Pointer
@@ -250,14 +472,6 @@ export class NapiRenderLib implements RenderLib {
     title: string | null,
   ) => void
   bufferResize!: (buffer: Pointer, width: number, height: number) => void
-  resizeRenderer!: (renderer: Pointer, width: number, height: number) => void
-  setCursorPosition!: (renderer: Pointer, x: number, y: number, visible: boolean) => void
-  setCursorStyle!: (renderer: Pointer, style: CursorStyle, blinking: boolean) => void
-  setCursorColor!: (renderer: Pointer, color: RGBA) => void
-  getCursorState!: (renderer: Pointer) => CursorState
-  setDebugOverlay!: (renderer: Pointer, enabled: boolean, corner: DebugOverlayCorner) => void
-  clearTerminal!: (renderer: Pointer) => void
-  setTerminalTitle!: (renderer: Pointer, title: string) => void
   copyToClipboardOSC52!: (renderer: Pointer, target: number, payload: Uint8Array) => boolean
   clearClipboardOSC52!: (renderer: Pointer, target: number) => boolean
   addToHitGrid!: (renderer: Pointer, x: number, y: number, width: number, height: number, id: number) => void
@@ -284,11 +498,6 @@ export class NapiRenderLib implements RenderLib {
   disableKittyKeyboard!: (renderer: Pointer) => void
   setKittyKeyboardFlags!: (renderer: Pointer, flags: number) => void
   getKittyKeyboardFlags!: (renderer: Pointer) => number
-  setupTerminal!: (renderer: Pointer, useAlternateScreen: boolean) => void
-  suspendRenderer!: (renderer: Pointer) => void
-  resumeRenderer!: (renderer: Pointer) => void
-  queryPixelResolution!: (renderer: Pointer) => void
-  writeOut!: (renderer: Pointer, data: string | Uint8Array) => void
   createTextBuffer!: (widthMethod: WidthMethod) => TextBuffer
   destroyTextBuffer!: (buffer: Pointer) => void
   textBufferGetLength!: (buffer: Pointer) => number
@@ -535,17 +744,4 @@ export class NapiRenderLib implements RenderLib {
     widthMethod: WidthMethod,
   ) => { ptr: Pointer; data: Array<{ width: number; char: number }> } | null
   freeUnicode!: (encoded: { ptr: Pointer; data: Array<{ width: number; char: number }> }) => void
-  // bufferDrawChar!: (
-  //   buffer: Pointer,
-  //   char: number,
-  //   x: number,
-  //   y: number,
-  //   fg: RGBA,
-  //   bg: RGBA,
-  //   attributes?: number,
-  // ) => void
-  onNativeEvent!: (name: string, handler: (data: ArrayBuffer) => void) => void
-  onceNativeEvent!: (name: string, handler: (data: ArrayBuffer) => void) => void
-  offNativeEvent!: (name: string, handler: (data: ArrayBuffer) => void) => void
-  onAnyNativeEvent!: (handler: (name: string, data: ArrayBuffer) => void) => void
 }
