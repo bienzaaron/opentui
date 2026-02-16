@@ -1,12 +1,7 @@
-import {
-  type ColorInput,
-  OptimizedBuffer,
-  parseColor,
-  Renderable,
-  type RenderableOptions,
-  type RenderContext,
-  RGBA,
-} from "../index"
+import { type ColorInput, parseColor, RGBA } from "../lib/RGBA"
+import { OptimizedBuffer } from "../buffer"
+import { Renderable, type RenderableOptions } from "../Renderable"
+import type { RenderContext } from "../types"
 
 const defaultThumbBackgroundColor = RGBA.fromHex("#9a9ea3")
 const defaultTrackBackgroundColor = RGBA.fromHex("#252527")
