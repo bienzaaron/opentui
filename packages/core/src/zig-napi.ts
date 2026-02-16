@@ -1,4 +1,4 @@
-import { type Pointer } from "bun:ffi"
+import type { Pointer } from "bun:ffi"
 import EventEmitter from "node:events"
 import { createRequire } from "node:module"
 import { existsSync } from "node:fs"
@@ -258,7 +258,13 @@ interface NapiSymbols {
   textBufferLoadFile: (buffer: Pointer, path: string) => boolean
   textBufferSetStyledText: (
     buffer: Pointer,
-    chunks: Array<{ text: string; fg?: RGBA | null; bg?: RGBA | null; attributes?: number; link?: { url: string } }>,
+    chunks: Array<{
+      text: string
+      fg?: Float32Array | null
+      bg?: Float32Array | null
+      attributes?: number
+      link?: { url: string }
+    }>,
   ) => void
   textBufferGetLineCount: (buffer: Pointer) => number
   textBufferGetPlainTextBytes: (buffer: Pointer, maxLength: number) => ArrayBuffer | null
@@ -462,7 +468,7 @@ interface NapiSymbols {
   editorViewGetLogicalLineInfo: (view: Pointer) => LineInfo
   editorViewSetPlaceholderStyledText: (
     view: Pointer,
-    chunks: Array<{ text: string; fg?: RGBA | null; bg?: RGBA | null; attributes?: number }>,
+    chunks: Array<{ text: string; fg?: Float32Array | null; bg?: Float32Array | null; attributes?: number }>,
   ) => void
   editorViewSetTabIndicator: (view: Pointer, indicator: number) => void
   editorViewSetTabIndicatorColor: (view: Pointer, color: Float32Array) => void
@@ -709,6 +715,8 @@ const REQUIRED_SYMBOLS = [
   "freeUnicode",
 ] as const
 
+const TRANSPARENT_RGBA_BUFFER = new Float32Array([0, 0, 0, 0])
+
 function assertSymbols(raw: unknown): asserts raw is NapiSymbols {
   if (!raw || typeof raw !== "object") {
     throw new Error("OpenTUI Node-API addon exports are invalid")
@@ -745,11 +753,21 @@ export class NapiRenderLib implements RenderLib {
   public readonly decoder: TextDecoder = new TextDecoder()
   private _nativeEvents: EventEmitter = new EventEmitter()
   private _anyEventHandlers: Array<(name: string, data: ArrayBuffer) => void> = []
+  private _logCallbackRef?: NativeLogCallback
+  private _eventCallbackRef?: NativeEventCallback
+  private _callbacksInitialized: boolean = false
 
   constructor(libPath?: string) {
     this.opentui = getOpenTUILib(libPath)
+  }
+
+  private ensureCallbacksInitialized(): void {
+    if (this._callbacksInitialized) return
+    if (process.env.OPENTUI_NAPI_DISABLE_CALLBACKS === "1") return
+
     this.setupLogging()
     this.setupEventBus()
+    this._callbacksInitialized = true
   }
 
   private setupLogging() {
@@ -771,10 +789,12 @@ export class NapiRenderLib implements RenderLib {
           console.log(message)
       }
     }
+    this._logCallbackRef = logCallback
     this.setLogCallback(logCallback)
   }
 
   private setLogCallback(callback: NativeLogCallback) {
+    this._logCallbackRef = callback
     this.opentui.symbols.setLogCallback(callback)
   }
 
@@ -787,10 +807,12 @@ export class NapiRenderLib implements RenderLib {
         }
       })
     }
+    this._eventCallbackRef = eventCallback
     this.setEventCallback(eventCallback)
   }
 
   private setEventCallback(callback: NativeEventCallback) {
+    this._eventCallbackRef = callback
     this.opentui.symbols.setEventCallback(callback)
   }
 
@@ -804,28 +826,24 @@ export class NapiRenderLib implements RenderLib {
     this.opentui.symbols.destroyRenderer(renderer)
   }
 
-  public setUseThread(renderer: Pointer, useThread: boolean): void {
+  public setUseThread(renderer: Pointer, useThread: boolean) {
     this.opentui.symbols.setUseThread(renderer, useThread)
   }
 
-  public setBackgroundColor(renderer: Pointer, color: RGBA): void {
+  public setBackgroundColor(renderer: Pointer, color: RGBA) {
     this.opentui.symbols.setBackgroundColor(renderer, color.buffer)
   }
 
-  public setRenderOffset(renderer: Pointer, offset: number): void {
+  public setRenderOffset(renderer: Pointer, offset: number) {
     this.opentui.symbols.setRenderOffset(renderer, offset)
   }
 
-  public updateStats(renderer: Pointer, time: number, fps: number, frameCallbackTime: number): void {
+  public updateStats(renderer: Pointer, time: number, fps: number, frameCallbackTime: number) {
     this.opentui.symbols.updateStats(renderer, time, fps, frameCallbackTime)
   }
 
-  public updateMemoryStats(renderer: Pointer, heapUsed: number, heapTotal: number, arrayBuffers: number): void {
+  public updateMemoryStats(renderer: Pointer, heapUsed: number, heapTotal: number, arrayBuffers: number) {
     this.opentui.symbols.updateMemoryStats(renderer, heapUsed, heapTotal, arrayBuffers)
-  }
-
-  public render(renderer: Pointer, force: boolean): void {
-    this.opentui.symbols.render(renderer, force)
   }
 
   public getNextBuffer(renderer: Pointer): OptimizedBuffer {
@@ -836,6 +854,7 @@ export class NapiRenderLib implements RenderLib {
 
     const width = this.opentui.symbols.getBufferWidth(bufferPtr)
     const height = this.opentui.symbols.getBufferHeight(bufferPtr)
+
     return new OptimizedBuffer(this, bufferPtr, width, height, { id: "next buffer", widthMethod: "unicode" })
   }
 
@@ -847,248 +866,39 @@ export class NapiRenderLib implements RenderLib {
 
     const width = this.opentui.symbols.getBufferWidth(bufferPtr)
     const height = this.opentui.symbols.getBufferHeight(bufferPtr)
+
     return new OptimizedBuffer(this, bufferPtr, width, height, { id: "current buffer", widthMethod: "unicode" })
-  }
-
-  public getBufferWidth(buffer: Pointer): number {
-    return this.opentui.symbols.getBufferWidth(buffer)
-  }
-
-  public getBufferHeight(buffer: Pointer): number {
-    return this.opentui.symbols.getBufferHeight(buffer)
-  }
-
-  public resizeRenderer(renderer: Pointer, width: number, height: number): void {
-    this.opentui.symbols.resizeRenderer(renderer, width, height)
-  }
-
-  public setCursorPosition(renderer: Pointer, x: number, y: number, visible: boolean): void {
-    this.opentui.symbols.setCursorPosition(renderer, x, y, visible)
-  }
-
-  public setCursorStyle(renderer: Pointer, style: CursorStyle, blinking: boolean): void {
-    this.opentui.symbols.setCursorStyle(renderer, style, blinking)
-  }
-
-  public setCursorColor(renderer: Pointer, color: RGBA): void {
-    this.opentui.symbols.setCursorColor(renderer, color.buffer)
-  }
-
-  public getCursorState(renderer: Pointer): CursorState {
-    const raw = this.opentui.symbols.getCursorState(renderer)
-    const styleMap: Record<number, CursorStyle> = {
-      0: "block",
-      1: "line",
-      2: "underline",
-    }
-
-    return {
-      x: raw.x,
-      y: raw.y,
-      visible: raw.visible,
-      style: styleMap[raw.style] || "block",
-      blinking: raw.blinking,
-      color: RGBA.fromValues(raw.r, raw.g, raw.b, raw.a),
-    }
-  }
-
-  public setDebugOverlay(renderer: Pointer, enabled: boolean, corner: DebugOverlayCorner): void {
-    this.opentui.symbols.setDebugOverlay(renderer, enabled, corner)
-  }
-
-  public clearTerminal(renderer: Pointer): void {
-    this.opentui.symbols.clearTerminal(renderer)
-  }
-
-  public setTerminalTitle(renderer: Pointer, title: string): void {
-    this.opentui.symbols.setTerminalTitle(renderer, title)
-  }
-
-  public copyToClipboardOSC52(renderer: Pointer, target: number, payload: Uint8Array): boolean {
-    return this.opentui.symbols.copyToClipboardOSC52(renderer, target, payload)
-  }
-
-  public clearClipboardOSC52(renderer: Pointer, target: number): boolean {
-    return this.opentui.symbols.clearClipboardOSC52(renderer, target)
-  }
-
-  public addToHitGrid(renderer: Pointer, x: number, y: number, width: number, height: number, id: number): void {
-    this.opentui.symbols.addToHitGrid(renderer, x, y, width, height, id)
-  }
-
-  public clearCurrentHitGrid(renderer: Pointer): void {
-    this.opentui.symbols.clearCurrentHitGrid(renderer)
-  }
-
-  public hitGridPushScissorRect(renderer: Pointer, x: number, y: number, width: number, height: number): void {
-    this.opentui.symbols.hitGridPushScissorRect(renderer, x, y, width, height)
-  }
-
-  public hitGridPopScissorRect(renderer: Pointer): void {
-    this.opentui.symbols.hitGridPopScissorRect(renderer)
-  }
-
-  public hitGridClearScissorRects(renderer: Pointer): void {
-    this.opentui.symbols.hitGridClearScissorRects(renderer)
-  }
-
-  public addToCurrentHitGridClipped(
-    renderer: Pointer,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    id: number,
-  ): void {
-    this.opentui.symbols.addToCurrentHitGridClipped(renderer, x, y, width, height, id)
-  }
-
-  public checkHit(renderer: Pointer, x: number, y: number): number {
-    return this.opentui.symbols.checkHit(renderer, x, y)
-  }
-
-  public getHitGridDirty(renderer: Pointer): boolean {
-    return this.opentui.symbols.getHitGridDirty(renderer)
-  }
-
-  public dumpHitGrid(renderer: Pointer): void {
-    this.opentui.symbols.dumpHitGrid(renderer)
-  }
-
-  public dumpBuffers(renderer: Pointer, timestamp?: number): void {
-    const ts = timestamp ?? Date.now()
-    this.opentui.symbols.dumpBuffers(renderer, ts)
-  }
-
-  public dumpStdoutBuffer(renderer: Pointer, timestamp?: number): void {
-    const ts = timestamp ?? Date.now()
-    this.opentui.symbols.dumpStdoutBuffer(renderer, ts)
-  }
-
-  public enableMouse(renderer: Pointer, enableMovement: boolean): void {
-    this.opentui.symbols.enableMouse(renderer, enableMovement)
-  }
-
-  public disableMouse(renderer: Pointer): void {
-    this.opentui.symbols.disableMouse(renderer)
-  }
-
-  public enableKittyKeyboard(renderer: Pointer, flags: number): void {
-    this.opentui.symbols.enableKittyKeyboard(renderer, flags)
-  }
-
-  public disableKittyKeyboard(renderer: Pointer): void {
-    this.opentui.symbols.disableKittyKeyboard(renderer)
-  }
-
-  public setKittyKeyboardFlags(renderer: Pointer, flags: number): void {
-    this.opentui.symbols.setKittyKeyboardFlags(renderer, flags)
-  }
-
-  public getKittyKeyboardFlags(renderer: Pointer): number {
-    return this.opentui.symbols.getKittyKeyboardFlags(renderer)
-  }
-
-  public setupTerminal(renderer: Pointer, useAlternateScreen: boolean): void {
-    this.opentui.symbols.setupTerminal(renderer, useAlternateScreen)
-  }
-
-  public suspendRenderer(renderer: Pointer): void {
-    this.opentui.symbols.suspendRenderer(renderer)
-  }
-
-  public resumeRenderer(renderer: Pointer): void {
-    this.opentui.symbols.resumeRenderer(renderer)
-  }
-
-  public queryPixelResolution(renderer: Pointer): void {
-    this.opentui.symbols.queryPixelResolution(renderer)
-  }
-
-  public writeOut(renderer: Pointer, data: string | Uint8Array): void {
-    const bytes = typeof data === "string" ? this.encoder.encode(data) : data
-    this.opentui.symbols.writeOut(renderer, bytes)
-  }
-
-  public bufferDrawChar(
-    buffer: Pointer,
-    char: number,
-    x: number,
-    y: number,
-    fg: RGBA,
-    bg: RGBA,
-    attributes: number = 0,
-  ) {
-    this.opentui.symbols.bufferDrawChar(buffer, char, x, y, fg.buffer, bg.buffer, attributes)
-  }
-
-  public createOptimizedBuffer(
-    width: number,
-    height: number,
-    widthMethod: WidthMethod,
-    respectAlpha: boolean = false,
-    id?: string,
-  ): OptimizedBuffer {
-    if (Number.isNaN(width) || Number.isNaN(height)) {
-      console.error(new Error(`Invalid dimensions for OptimizedBuffer: ${width}x${height}`).stack)
-    }
-
-    const widthMethodCode = widthMethod === "wcwidth" ? 0 : 1
-    const idToUse = id || "unnamed buffer"
-    const bufferPtr = this.opentui.symbols.createOptimizedBuffer(width, height, respectAlpha, widthMethodCode, idToUse)
-    if (!bufferPtr) {
-      throw new Error(`Failed to create optimized buffer: ${width}x${height}`)
-    }
-
-    return new OptimizedBuffer(this, bufferPtr, width, height, { respectAlpha, id, widthMethod })
-  }
-
-  public destroyOptimizedBuffer(bufferPtr: Pointer): void {
-    this.opentui.symbols.destroyOptimizedBuffer(bufferPtr)
-  }
-
-  public drawFrameBuffer(
-    targetBufferPtr: Pointer,
-    destX: number,
-    destY: number,
-    bufferPtr: Pointer,
-    sourceX?: number,
-    sourceY?: number,
-    sourceWidth?: number,
-    sourceHeight?: number,
-  ): void {
-    const srcX = sourceX ?? 0
-    const srcY = sourceY ?? 0
-    const srcWidth = sourceWidth ?? 0
-    const srcHeight = sourceHeight ?? 0
-    this.opentui.symbols.drawFrameBuffer(targetBufferPtr, destX, destY, bufferPtr, srcX, srcY, srcWidth, srcHeight)
-  }
-
-  public bufferClear(buffer: Pointer, color: RGBA): void {
-    this.opentui.symbols.bufferClear(buffer, color.buffer)
   }
 
   public bufferGetCharPtr(buffer: Pointer): Pointer {
     const ptr = this.opentui.symbols.bufferGetCharPtr(buffer)
-    if (!ptr) throw new Error("Failed to get char pointer")
+    if (!ptr) {
+      throw new Error("Failed to get char pointer")
+    }
     return ptr
   }
 
   public bufferGetFgPtr(buffer: Pointer): Pointer {
     const ptr = this.opentui.symbols.bufferGetFgPtr(buffer)
-    if (!ptr) throw new Error("Failed to get fg pointer")
+    if (!ptr) {
+      throw new Error("Failed to get fg pointer")
+    }
     return ptr
   }
 
   public bufferGetBgPtr(buffer: Pointer): Pointer {
     const ptr = this.opentui.symbols.bufferGetBgPtr(buffer)
-    if (!ptr) throw new Error("Failed to get bg pointer")
+    if (!ptr) {
+      throw new Error("Failed to get bg pointer")
+    }
     return ptr
   }
 
   public bufferGetAttributesPtr(buffer: Pointer): Pointer {
     const ptr = this.opentui.symbols.bufferGetAttributesPtr(buffer)
-    if (!ptr) throw new Error("Failed to get attributes pointer")
+    if (!ptr) {
+      throw new Error("Failed to get attributes pointer")
+    }
     return ptr
   }
 
@@ -1112,6 +922,18 @@ export class NapiRenderLib implements RenderLib {
     return this.opentui.symbols.bufferWriteResolvedChars(buffer, outputBuffer, addLineBreaks)
   }
 
+  public getBufferWidth(buffer: Pointer): number {
+    return this.opentui.symbols.getBufferWidth(buffer)
+  }
+
+  public getBufferHeight(buffer: Pointer): number {
+    return this.opentui.symbols.getBufferHeight(buffer)
+  }
+
+  public bufferClear(buffer: Pointer, color: RGBA): void {
+    this.opentui.symbols.bufferClear(buffer, color.buffer)
+  }
+
   public bufferDrawText(
     buffer: Pointer,
     text: string,
@@ -1120,8 +942,11 @@ export class NapiRenderLib implements RenderLib {
     color: RGBA,
     bgColor?: RGBA,
     attributes?: number,
-  ): void {
-    this.opentui.symbols.bufferDrawText(buffer, text, x, y, color.buffer, bgColor?.buffer ?? null, attributes ?? 0)
+  ) {
+    const bg = bgColor ? bgColor.buffer : TRANSPARENT_RGBA_BUFFER
+    const fg = color.buffer
+
+    this.opentui.symbols.bufferDrawText(buffer, text, x, y, fg, bg, attributes ?? 0)
   }
 
   public bufferSetCellWithAlphaBlending(
@@ -1132,17 +957,12 @@ export class NapiRenderLib implements RenderLib {
     color: RGBA,
     bgColor: RGBA,
     attributes?: number,
-  ): void {
-    const charCode = char.codePointAt(0) ?? " ".codePointAt(0)!
-    this.opentui.symbols.bufferSetCellWithAlphaBlending(
-      buffer,
-      x,
-      y,
-      charCode,
-      color.buffer,
-      bgColor.buffer,
-      attributes ?? 0,
-    )
+  ) {
+    const charPtr = char.codePointAt(0) ?? " ".codePointAt(0)!
+    const bg = bgColor.buffer
+    const fg = color.buffer
+
+    this.opentui.symbols.bufferSetCellWithAlphaBlending(buffer, x, y, charPtr, fg, bg, attributes ?? 0)
   }
 
   public bufferSetCell(
@@ -1153,13 +973,17 @@ export class NapiRenderLib implements RenderLib {
     color: RGBA,
     bgColor: RGBA,
     attributes?: number,
-  ): void {
-    const charCode = char.codePointAt(0) ?? " ".codePointAt(0)!
-    this.opentui.symbols.bufferSetCell(buffer, x, y, charCode, color.buffer, bgColor.buffer, attributes ?? 0)
+  ) {
+    const charPtr = char.codePointAt(0) ?? " ".codePointAt(0)!
+    const bg = bgColor.buffer
+    const fg = color.buffer
+
+    this.opentui.symbols.bufferSetCell(buffer, x, y, charPtr, fg, bg, attributes ?? 0)
   }
 
-  public bufferFillRect(buffer: Pointer, x: number, y: number, width: number, height: number, color: RGBA): void {
-    this.opentui.symbols.bufferFillRect(buffer, x, y, width, height, color.buffer)
+  public bufferFillRect(buffer: Pointer, x: number, y: number, width: number, height: number, color: RGBA) {
+    const bg = color.buffer
+    this.opentui.symbols.bufferFillRect(buffer, x, y, width, height, bg)
   }
 
   public bufferDrawSuperSampleBuffer(
@@ -1277,47 +1101,209 @@ export class NapiRenderLib implements RenderLib {
     this.opentui.symbols.bufferResize(buffer, width, height)
   }
 
-  public bufferPushScissorRect(buffer: Pointer, x: number, y: number, width: number, height: number): void {
-    this.opentui.symbols.bufferPushScissorRect(buffer, x, y, width, height)
+  public resizeRenderer(renderer: Pointer, width: number, height: number) {
+    this.opentui.symbols.resizeRenderer(renderer, width, height)
   }
 
-  public bufferPopScissorRect(buffer: Pointer): void {
-    this.opentui.symbols.bufferPopScissorRect(buffer)
+  public setCursorPosition(renderer: Pointer, x: number, y: number, visible: boolean) {
+    this.opentui.symbols.setCursorPosition(renderer, x, y, visible)
   }
 
-  public bufferClearScissorRects(buffer: Pointer): void {
-    this.opentui.symbols.bufferClearScissorRects(buffer)
+  public setCursorStyle(renderer: Pointer, style: CursorStyle, blinking: boolean) {
+    this.opentui.symbols.setCursorStyle(renderer, style, blinking)
   }
 
-  public bufferPushOpacity(buffer: Pointer, opacity: number): void {
-    this.opentui.symbols.bufferPushOpacity(buffer, opacity)
+  public setCursorColor(renderer: Pointer, color: RGBA): void {
+    this.opentui.symbols.setCursorColor(renderer, color.buffer)
   }
 
-  public bufferPopOpacity(buffer: Pointer): void {
-    this.opentui.symbols.bufferPopOpacity(buffer)
+  public getCursorState(renderer: Pointer): CursorState {
+    const raw = this.opentui.symbols.getCursorState(renderer)
+    const styleMap: Record<number, CursorStyle> = {
+      0: "block",
+      1: "line",
+      2: "underline",
+    }
+
+    return {
+      x: raw.x,
+      y: raw.y,
+      visible: raw.visible,
+      style: styleMap[raw.style] || "block",
+      blinking: raw.blinking,
+      color: RGBA.fromValues(raw.r, raw.g, raw.b, raw.a),
+    }
   }
 
-  public bufferGetCurrentOpacity(buffer: Pointer): number {
-    return this.opentui.symbols.bufferGetCurrentOpacity(buffer)
+  public render(renderer: Pointer, force: boolean) {
+    this.opentui.symbols.render(renderer, force)
   }
 
-  public bufferClearOpacity(buffer: Pointer): void {
-    this.opentui.symbols.bufferClearOpacity(buffer)
+  public createOptimizedBuffer(
+    width: number,
+    height: number,
+    widthMethod: WidthMethod,
+    respectAlpha: boolean = false,
+    id?: string,
+  ): OptimizedBuffer {
+    if (Number.isNaN(width) || Number.isNaN(height)) {
+      console.error(new Error(`Invalid dimensions for OptimizedBuffer: ${width}x${height}`).stack)
+    }
+
+    const widthMethodCode = widthMethod === "wcwidth" ? 0 : 1
+    const idToUse = id || "unnamed buffer"
+    const bufferPtr = this.opentui.symbols.createOptimizedBuffer(width, height, respectAlpha, widthMethodCode, idToUse)
+    if (!bufferPtr) {
+      throw new Error(`Failed to create optimized buffer: ${width}x${height}`)
+    }
+
+    return new OptimizedBuffer(this, bufferPtr, width, height, { respectAlpha, id, widthMethod })
   }
 
-  public bufferDrawTextBufferView(buffer: Pointer, view: Pointer, x: number, y: number): void {
-    this.opentui.symbols.bufferDrawTextBufferView(buffer, view, x, y)
+  public destroyOptimizedBuffer(bufferPtr: Pointer) {
+    this.opentui.symbols.destroyOptimizedBuffer(bufferPtr)
   }
 
-  public bufferDrawEditorView(buffer: Pointer, view: Pointer, x: number, y: number): void {
-    this.opentui.symbols.bufferDrawEditorView(buffer, view, x, y)
+  public drawFrameBuffer(
+    targetBufferPtr: Pointer,
+    destX: number,
+    destY: number,
+    bufferPtr: Pointer,
+    sourceX?: number,
+    sourceY?: number,
+    sourceWidth?: number,
+    sourceHeight?: number,
+  ) {
+    const srcX = sourceX ?? 0
+    const srcY = sourceY ?? 0
+    const srcWidth = sourceWidth ?? 0
+    const srcHeight = sourceHeight ?? 0
+    this.opentui.symbols.drawFrameBuffer(targetBufferPtr, destX, destY, bufferPtr, srcX, srcY, srcWidth, srcHeight)
+  }
+
+  public setDebugOverlay(renderer: Pointer, enabled: boolean, corner: DebugOverlayCorner) {
+    this.opentui.symbols.setDebugOverlay(renderer, enabled, corner)
+  }
+
+  public clearTerminal(renderer: Pointer) {
+    this.opentui.symbols.clearTerminal(renderer)
+  }
+
+  public setTerminalTitle(renderer: Pointer, title: string) {
+    this.opentui.symbols.setTerminalTitle(renderer, title)
+  }
+
+  public copyToClipboardOSC52(renderer: Pointer, target: number, payload: Uint8Array): boolean {
+    return this.opentui.symbols.copyToClipboardOSC52(renderer, target, payload)
+  }
+
+  public clearClipboardOSC52(renderer: Pointer, target: number): boolean {
+    return this.opentui.symbols.clearClipboardOSC52(renderer, target)
+  }
+
+  public addToHitGrid(renderer: Pointer, x: number, y: number, width: number, height: number, id: number) {
+    this.opentui.symbols.addToHitGrid(renderer, x, y, width, height, id)
+  }
+
+  public clearCurrentHitGrid(renderer: Pointer) {
+    this.opentui.symbols.clearCurrentHitGrid(renderer)
+  }
+
+  public hitGridPushScissorRect(renderer: Pointer, x: number, y: number, width: number, height: number) {
+    this.opentui.symbols.hitGridPushScissorRect(renderer, x, y, width, height)
+  }
+
+  public hitGridPopScissorRect(renderer: Pointer) {
+    this.opentui.symbols.hitGridPopScissorRect(renderer)
+  }
+
+  public hitGridClearScissorRects(renderer: Pointer) {
+    this.opentui.symbols.hitGridClearScissorRects(renderer)
+  }
+
+  public addToCurrentHitGridClipped(
+    renderer: Pointer,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    id: number,
+  ) {
+    this.opentui.symbols.addToCurrentHitGridClipped(renderer, x, y, width, height, id)
+  }
+
+  public checkHit(renderer: Pointer, x: number, y: number): number {
+    return this.opentui.symbols.checkHit(renderer, x, y)
+  }
+
+  public getHitGridDirty(renderer: Pointer): boolean {
+    return this.opentui.symbols.getHitGridDirty(renderer)
+  }
+
+  public dumpHitGrid(renderer: Pointer): void {
+    this.opentui.symbols.dumpHitGrid(renderer)
+  }
+
+  public dumpBuffers(renderer: Pointer, timestamp?: number): void {
+    const ts = timestamp ?? Date.now()
+    this.opentui.symbols.dumpBuffers(renderer, ts)
+  }
+
+  public dumpStdoutBuffer(renderer: Pointer, timestamp?: number): void {
+    const ts = timestamp ?? Date.now()
+    this.opentui.symbols.dumpStdoutBuffer(renderer, ts)
+  }
+
+  public enableMouse(renderer: Pointer, enableMovement: boolean): void {
+    this.opentui.symbols.enableMouse(renderer, enableMovement)
+  }
+
+  public disableMouse(renderer: Pointer): void {
+    this.opentui.symbols.disableMouse(renderer)
+  }
+
+  public enableKittyKeyboard(renderer: Pointer, flags: number): void {
+    this.opentui.symbols.enableKittyKeyboard(renderer, flags)
+  }
+
+  public disableKittyKeyboard(renderer: Pointer): void {
+    this.opentui.symbols.disableKittyKeyboard(renderer)
+  }
+
+  public setKittyKeyboardFlags(renderer: Pointer, flags: number): void {
+    this.opentui.symbols.setKittyKeyboardFlags(renderer, flags)
+  }
+
+  public getKittyKeyboardFlags(renderer: Pointer): number {
+    return this.opentui.symbols.getKittyKeyboardFlags(renderer)
+  }
+
+  public setupTerminal(renderer: Pointer, useAlternateScreen: boolean): void {
+    this.opentui.symbols.setupTerminal(renderer, useAlternateScreen)
+  }
+
+  public suspendRenderer(renderer: Pointer): void {
+    this.opentui.symbols.suspendRenderer(renderer)
+  }
+
+  public resumeRenderer(renderer: Pointer): void {
+    this.opentui.symbols.resumeRenderer(renderer)
+  }
+
+  public queryPixelResolution(renderer: Pointer): void {
+    this.opentui.symbols.queryPixelResolution(renderer)
+  }
+
+  public writeOut(renderer: Pointer, data: string | Uint8Array): void {
+    const bytes = typeof data === "string" ? this.encoder.encode(data) : data
+    this.opentui.symbols.writeOut(renderer, bytes)
   }
 
   public createTextBuffer(widthMethod: WidthMethod): TextBuffer {
     const widthMethodCode = widthMethod === "wcwidth" ? 0 : 1
     const bufferPtr = this.opentui.symbols.createTextBuffer(widthMethodCode)
     if (!bufferPtr) {
-      throw new Error("Failed to create TextBuffer")
+      throw new Error(`Failed to create TextBuffer`)
     }
     return new TextBuffer(this, bufferPtr)
   }
@@ -1342,8 +1328,34 @@ export class NapiRenderLib implements RenderLib {
     this.opentui.symbols.textBufferClear(buffer)
   }
 
+  public textBufferSetDefaultFg(buffer: Pointer, fg: RGBA | null): void {
+    const fgPtr = fg ? fg.buffer : null
+    this.opentui.symbols.textBufferSetDefaultFg(buffer, fgPtr)
+  }
+
+  public textBufferSetDefaultBg(buffer: Pointer, bg: RGBA | null): void {
+    const bgPtr = bg ? bg.buffer : null
+    this.opentui.symbols.textBufferSetDefaultBg(buffer, bgPtr)
+  }
+
+  public textBufferSetDefaultAttributes(buffer: Pointer, attributes: number | null): void {
+    this.opentui.symbols.textBufferSetDefaultAttributes(buffer, attributes)
+  }
+
+  public textBufferResetDefaults(buffer: Pointer): void {
+    this.opentui.symbols.textBufferResetDefaults(buffer)
+  }
+
+  public textBufferGetTabWidth(buffer: Pointer): number {
+    return this.opentui.symbols.textBufferGetTabWidth(buffer)
+  }
+
+  public textBufferSetTabWidth(buffer: Pointer, width: number): void {
+    this.opentui.symbols.textBufferSetTabWidth(buffer, width)
+  }
+
   public textBufferRegisterMemBuffer(buffer: Pointer, bytes: Uint8Array, owned: boolean = false): number {
-    const result = this.opentui.symbols.textBufferRegisterMemBuffer(buffer, bytes, owned)
+    const result = this.opentui.symbols.textBufferRegisterMemBuffer(buffer, this.decoder.decode(bytes) as any, owned)
     if (result === 0xffff) {
       throw new Error("Failed to register memory buffer")
     }
@@ -1356,7 +1368,7 @@ export class NapiRenderLib implements RenderLib {
     bytes: Uint8Array,
     owned: boolean = false,
   ): boolean {
-    return this.opentui.symbols.textBufferReplaceMemBuffer(buffer, memId, bytes, owned)
+    return this.opentui.symbols.textBufferReplaceMemBuffer(buffer, memId, this.decoder.decode(bytes) as any, owned)
   }
 
   public textBufferClearMemRegistry(buffer: Pointer): void {
@@ -1368,7 +1380,7 @@ export class NapiRenderLib implements RenderLib {
   }
 
   public textBufferAppend(buffer: Pointer, bytes: Uint8Array): void {
-    this.opentui.symbols.textBufferAppend(buffer, bytes)
+    this.opentui.symbols.textBufferAppend(buffer, this.decoder.decode(bytes) as any)
   }
 
   public textBufferAppendFromMemId(buffer: Pointer, memId: number): void {
@@ -1388,31 +1400,26 @@ export class NapiRenderLib implements RenderLib {
       this.textBufferClear(buffer)
       return
     }
-    this.opentui.symbols.textBufferSetStyledText(buffer, nonEmptyChunks)
-  }
+    const sanitizedChunks = nonEmptyChunks.map((chunk) => {
+      const out: {
+        text: string
+        fg?: Float32Array | null
+        bg?: Float32Array | null
+        attributes?: number
+        link?: { url: string }
+      } = { text: chunk.text }
 
-  public textBufferSetDefaultFg(buffer: Pointer, fg: RGBA | null): void {
-    this.opentui.symbols.textBufferSetDefaultFg(buffer, fg?.buffer ?? null)
-  }
-
-  public textBufferSetDefaultBg(buffer: Pointer, bg: RGBA | null): void {
-    this.opentui.symbols.textBufferSetDefaultBg(buffer, bg?.buffer ?? null)
-  }
-
-  public textBufferSetDefaultAttributes(buffer: Pointer, attributes: number | null): void {
-    this.opentui.symbols.textBufferSetDefaultAttributes(buffer, attributes)
-  }
-
-  public textBufferResetDefaults(buffer: Pointer): void {
-    this.opentui.symbols.textBufferResetDefaults(buffer)
-  }
-
-  public textBufferGetTabWidth(buffer: Pointer): number {
-    return this.opentui.symbols.textBufferGetTabWidth(buffer)
-  }
-
-  public textBufferSetTabWidth(buffer: Pointer, width: number): void {
-    this.opentui.symbols.textBufferSetTabWidth(buffer, width)
+      if (chunk.fg !== undefined) {
+        out.fg = chunk.fg ? chunk.fg.buffer : null
+      }
+      if (chunk.bg !== undefined) {
+        out.bg = chunk.bg ? chunk.bg.buffer : null
+      }
+      if (chunk.attributes !== undefined) out.attributes = chunk.attributes
+      if (chunk.link?.url) out.link = { url: chunk.link.url }
+      return out
+    })
+    this.opentui.symbols.textBufferSetStyledText(buffer, sanitizedChunks)
   }
 
   public textBufferGetLineCount(buffer: Pointer): number {
@@ -1472,7 +1479,9 @@ export class NapiRenderLib implements RenderLib {
     bgColor: RGBA | null,
     fgColor: RGBA | null,
   ): void {
-    this.opentui.symbols.textBufferViewSetSelection(view, start, end, bgColor?.buffer ?? null, fgColor?.buffer ?? null)
+    const bg = bgColor ? bgColor.buffer : null
+    const fg = fgColor ? fgColor.buffer : null
+    this.opentui.symbols.textBufferViewSetSelection(view, start, end, bg, fg)
   }
 
   public textBufferViewResetSelection(view: Pointer): void {
@@ -1492,19 +1501,15 @@ export class NapiRenderLib implements RenderLib {
     bgColor: RGBA | null,
     fgColor: RGBA | null,
   ): boolean {
-    return this.opentui.symbols.textBufferViewSetLocalSelection(
-      view,
-      anchorX,
-      anchorY,
-      focusX,
-      focusY,
-      bgColor?.buffer ?? null,
-      fgColor?.buffer ?? null,
-    )
+    const bg = bgColor ? bgColor.buffer : null
+    const fg = fgColor ? fgColor.buffer : null
+    return this.opentui.symbols.textBufferViewSetLocalSelection(view, anchorX, anchorY, focusX, focusY, bg, fg)
   }
 
   public textBufferViewUpdateSelection(view: Pointer, end: number, bgColor: RGBA | null, fgColor: RGBA | null): void {
-    this.opentui.symbols.textBufferViewUpdateSelection(view, end, bgColor?.buffer ?? null, fgColor?.buffer ?? null)
+    const bg = bgColor ? bgColor.buffer : null
+    const fg = fgColor ? fgColor.buffer : null
+    this.opentui.symbols.textBufferViewUpdateSelection(view, end, bg, fg)
   }
 
   public textBufferViewUpdateLocalSelection(
@@ -1516,15 +1521,9 @@ export class NapiRenderLib implements RenderLib {
     bgColor: RGBA | null,
     fgColor: RGBA | null,
   ): boolean {
-    return this.opentui.symbols.textBufferViewUpdateLocalSelection(
-      view,
-      anchorX,
-      anchorY,
-      focusX,
-      focusY,
-      bgColor?.buffer ?? null,
-      fgColor?.buffer ?? null,
-    )
+    const bg = bgColor ? bgColor.buffer : null
+    const fg = fgColor ? fgColor.buffer : null
+    return this.opentui.symbols.textBufferViewUpdateLocalSelection(view, anchorX, anchorY, focusX, focusY, bg, fg)
   }
 
   public textBufferViewResetLocalSelection(view: Pointer): void {
@@ -1556,6 +1555,10 @@ export class NapiRenderLib implements RenderLib {
     return this.opentui.symbols.textBufferViewGetLogicalLineInfo(view)
   }
 
+  public textBufferViewGetVirtualLineCount(view: Pointer): number {
+    return this.opentui.symbols.textBufferViewGetVirtualLineCount(view)
+  }
+
   public textBufferViewGetSelectedTextBytes(view: Pointer, maxLength: number): Uint8Array | null {
     const raw = this.opentui.symbols.textBufferViewGetSelectedTextBytes(view, maxLength)
     return raw ? new Uint8Array(raw) : null
@@ -1584,10 +1587,6 @@ export class NapiRenderLib implements RenderLib {
     height: number,
   ): { lineCount: number; maxWidth: number } | null {
     return this.opentui.symbols.textBufferViewMeasureForDimensions(view, width, height)
-  }
-
-  public textBufferViewGetVirtualLineCount(view: Pointer): number {
-    return this.opentui.symbols.textBufferViewGetVirtualLineCount(view)
   }
 
   public textBufferAddHighlightByCharRange(buffer: Pointer, highlight: Highlight): void {
@@ -1622,58 +1621,128 @@ export class NapiRenderLib implements RenderLib {
     return this.opentui.symbols.textBufferGetHighlightCount(buffer)
   }
 
-  public onNativeEvent(name: string, handler: (data: ArrayBuffer) => void): void {
-    this._nativeEvents.on(name, handler)
+  public getArenaAllocatedBytes(): number {
+    return this.opentui.symbols.getArenaAllocatedBytes()
   }
 
-  public onceNativeEvent(name: string, handler: (data: ArrayBuffer) => void): void {
-    this._nativeEvents.once(name, handler)
+  public bufferDrawTextBufferView(buffer: Pointer, view: Pointer, x: number, y: number): void {
+    this.opentui.symbols.bufferDrawTextBufferView(buffer, view, x, y)
   }
 
-  public offNativeEvent(name: string, handler: (data: ArrayBuffer) => void): void {
-    this._nativeEvents.off(name, handler)
+  public bufferDrawEditorView(buffer: Pointer, view: Pointer, x: number, y: number): void {
+    this.opentui.symbols.bufferDrawEditorView(buffer, view, x, y)
   }
 
-  public onAnyNativeEvent(handler: (name: string, data: ArrayBuffer) => void): void {
-    this._anyEventHandlers.push(handler)
+  public createEditorView(editBufferPtr: Pointer, viewportWidth: number, viewportHeight: number): Pointer {
+    const viewPtr = this.opentui.symbols.createEditorView(editBufferPtr, viewportWidth, viewportHeight)
+    if (!viewPtr) {
+      throw new Error("Failed to create EditorView")
+    }
+    return viewPtr
   }
+
+  public destroyEditorView(view: Pointer): void {
+    this.opentui.symbols.destroyEditorView(view)
+  }
+
+  public editorViewSetViewportSize(view: Pointer, width: number, height: number): void {
+    this.opentui.symbols.editorViewSetViewportSize(view, width, height)
+  }
+
+  public editorViewSetViewport(
+    view: Pointer,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    moveCursor: boolean,
+  ): void {
+    this.opentui.symbols.editorViewSetViewport(view, x, y, width, height, moveCursor)
+  }
+
+  public editorViewGetViewport(view: Pointer): { offsetY: number; offsetX: number; height: number; width: number } {
+    return this.opentui.symbols.editorViewGetViewport(view)
+  }
+
+  public editorViewSetScrollMargin(view: Pointer, margin: number): void {
+    this.opentui.symbols.editorViewSetScrollMargin(view, margin)
+  }
+
+  public editorViewSetWrapMode(view: Pointer, mode: "none" | "char" | "word"): void {
+    const modeValue = mode === "none" ? 0 : mode === "char" ? 1 : 2
+    this.opentui.symbols.editorViewSetWrapMode(view, modeValue)
+  }
+
+  public editorViewGetVirtualLineCount(view: Pointer): number {
+    return this.opentui.symbols.editorViewGetVirtualLineCount(view)
+  }
+
+  public editorViewGetTotalVirtualLineCount(view: Pointer): number {
+    return this.opentui.symbols.editorViewGetTotalVirtualLineCount(view)
+  }
+
+  public editorViewGetTextBufferView(view: Pointer): Pointer {
+    return this.opentui.symbols.editorViewGetTextBufferView(view)
+  }
+
+  public editorViewGetLineInfo(view: Pointer): LineInfo {
+    return this.opentui.symbols.editorViewGetLineInfo(view)
+  }
+
+  public editorViewGetLogicalLineInfo(view: Pointer): LineInfo {
+    return this.opentui.symbols.editorViewGetLogicalLineInfo(view)
+  }
+
   public createEditBuffer(widthMethod: WidthMethod): Pointer {
     const widthMethodCode = widthMethod === "wcwidth" ? 0 : 1
     const bufferPtr = this.opentui.symbols.createEditBuffer(widthMethodCode)
-    if (!bufferPtr) throw new Error("Failed to create EditBuffer")
+    if (!bufferPtr) {
+      throw new Error("Failed to create EditBuffer")
+    }
     return bufferPtr
   }
+
   public destroyEditBuffer(buffer: Pointer): void {
     this.opentui.symbols.destroyEditBuffer(buffer)
   }
+
   public editBufferSetText(buffer: Pointer, textBytes: Uint8Array): void {
-    this.opentui.symbols.editBufferSetText(buffer, textBytes)
+    this.opentui.symbols.editBufferSetText(buffer, this.decoder.decode(textBytes) as any)
   }
+
   public editBufferSetTextFromMem(buffer: Pointer, memId: number): void {
     this.opentui.symbols.editBufferSetTextFromMem(buffer, memId)
   }
+
   public editBufferReplaceText(buffer: Pointer, textBytes: Uint8Array): void {
-    this.opentui.symbols.editBufferReplaceText(buffer, textBytes)
+    this.opentui.symbols.editBufferReplaceText(buffer, this.decoder.decode(textBytes) as any)
   }
+
   public editBufferReplaceTextFromMem(buffer: Pointer, memId: number): void {
     this.opentui.symbols.editBufferReplaceTextFromMem(buffer, memId)
   }
+
   public editBufferGetText(buffer: Pointer, maxLength: number): Uint8Array | null {
     const raw = this.opentui.symbols.editBufferGetText(buffer, maxLength)
     return raw ? new Uint8Array(raw) : null
   }
+
   public editBufferInsertChar(buffer: Pointer, char: string): void {
     this.opentui.symbols.editBufferInsertChar(buffer, char)
   }
+
   public editBufferInsertText(buffer: Pointer, text: string): void {
     this.opentui.symbols.editBufferInsertText(buffer, text)
   }
+
   public editBufferDeleteChar(buffer: Pointer): void {
     this.opentui.symbols.editBufferDeleteChar(buffer)
   }
+
   public editBufferDeleteCharBackward(buffer: Pointer): void {
     this.opentui.symbols.editBufferDeleteCharBackward(buffer)
   }
+
   public editBufferDeleteRange(
     buffer: Pointer,
     startLine: number,
@@ -1683,86 +1752,113 @@ export class NapiRenderLib implements RenderLib {
   ): void {
     this.opentui.symbols.editBufferDeleteRange(buffer, startLine, startCol, endLine, endCol)
   }
+
   public editBufferNewLine(buffer: Pointer): void {
     this.opentui.symbols.editBufferNewLine(buffer)
   }
+
   public editBufferDeleteLine(buffer: Pointer): void {
     this.opentui.symbols.editBufferDeleteLine(buffer)
   }
+
   public editBufferMoveCursorLeft(buffer: Pointer): void {
     this.opentui.symbols.editBufferMoveCursorLeft(buffer)
   }
+
   public editBufferMoveCursorRight(buffer: Pointer): void {
     this.opentui.symbols.editBufferMoveCursorRight(buffer)
   }
+
   public editBufferMoveCursorUp(buffer: Pointer): void {
     this.opentui.symbols.editBufferMoveCursorUp(buffer)
   }
+
   public editBufferMoveCursorDown(buffer: Pointer): void {
     this.opentui.symbols.editBufferMoveCursorDown(buffer)
   }
+
   public editBufferGotoLine(buffer: Pointer, line: number): void {
     this.opentui.symbols.editBufferGotoLine(buffer, line)
   }
+
   public editBufferSetCursor(buffer: Pointer, line: number, col: number): void {
     this.opentui.symbols.editBufferSetCursor(buffer, line, col)
   }
+
   public editBufferSetCursorToLineCol(buffer: Pointer, line: number, col: number): void {
     this.opentui.symbols.editBufferSetCursorToLineCol(buffer, line, col)
   }
+
   public editBufferSetCursorByOffset(buffer: Pointer, offset: number): void {
     this.opentui.symbols.editBufferSetCursorByOffset(buffer, offset)
   }
+
   public editBufferGetCursorPosition(buffer: Pointer): LogicalCursor {
     return this.opentui.symbols.editBufferGetCursorPosition(buffer)
   }
+
   public editBufferGetId(buffer: Pointer): number {
     return this.opentui.symbols.editBufferGetId(buffer)
   }
+
   public editBufferGetTextBuffer(buffer: Pointer): Pointer {
     return this.opentui.symbols.editBufferGetTextBuffer(buffer)
   }
+
   public editBufferDebugLogRope(buffer: Pointer): void {
     this.opentui.symbols.editBufferDebugLogRope(buffer)
   }
+
   public editBufferUndo(buffer: Pointer, maxLength: number): Uint8Array | null {
     const raw = this.opentui.symbols.editBufferUndo(buffer, maxLength)
     return raw ? new Uint8Array(raw) : null
   }
+
   public editBufferRedo(buffer: Pointer, maxLength: number): Uint8Array | null {
     const raw = this.opentui.symbols.editBufferRedo(buffer, maxLength)
     return raw ? new Uint8Array(raw) : null
   }
+
   public editBufferCanUndo(buffer: Pointer): boolean {
     return this.opentui.symbols.editBufferCanUndo(buffer)
   }
+
   public editBufferCanRedo(buffer: Pointer): boolean {
     return this.opentui.symbols.editBufferCanRedo(buffer)
   }
+
   public editBufferClearHistory(buffer: Pointer): void {
     this.opentui.symbols.editBufferClearHistory(buffer)
   }
+
   public editBufferClear(buffer: Pointer): void {
     this.opentui.symbols.editBufferClear(buffer)
   }
+
   public editBufferGetNextWordBoundary(buffer: Pointer): LogicalCursor {
     return this.opentui.symbols.editBufferGetNextWordBoundary(buffer)
   }
+
   public editBufferGetPrevWordBoundary(buffer: Pointer): LogicalCursor {
     return this.opentui.symbols.editBufferGetPrevWordBoundary(buffer)
   }
+
   public editBufferGetEOL(buffer: Pointer): LogicalCursor {
     return this.opentui.symbols.editBufferGetEOL(buffer)
   }
+
   public editBufferOffsetToPosition(buffer: Pointer, offset: number): LogicalCursor | null {
     return this.opentui.symbols.editBufferOffsetToPosition(buffer, offset)
   }
+
   public editBufferPositionToOffset(buffer: Pointer, row: number, col: number): number {
     return this.opentui.symbols.editBufferPositionToOffset(buffer, row, col)
   }
+
   public editBufferGetLineStartOffset(buffer: Pointer, row: number): number {
     return this.opentui.symbols.editBufferGetLineStartOffset(buffer, row)
   }
+
   public editBufferGetTextRange(
     buffer: Pointer,
     startOffset: number,
@@ -1772,6 +1868,7 @@ export class NapiRenderLib implements RenderLib {
     const raw = this.opentui.symbols.editBufferGetTextRange(buffer, startOffset, endOffset, maxLength)
     return raw ? new Uint8Array(raw) : null
   }
+
   public editBufferGetTextRangeByCoords(
     buffer: Pointer,
     startRow: number,
@@ -1790,46 +1887,7 @@ export class NapiRenderLib implements RenderLib {
     )
     return raw ? new Uint8Array(raw) : null
   }
-  public createEditorView(editBufferPtr: Pointer, viewportWidth: number, viewportHeight: number): Pointer {
-    const ptr = this.opentui.symbols.createEditorView(editBufferPtr, viewportWidth, viewportHeight)
-    if (!ptr) throw new Error("Failed to create EditorView")
-    return ptr
-  }
-  public destroyEditorView(view: Pointer): void {
-    this.opentui.symbols.destroyEditorView(view)
-  }
-  public editorViewSetViewportSize(view: Pointer, width: number, height: number): void {
-    this.opentui.symbols.editorViewSetViewportSize(view, width, height)
-  }
-  public editorViewSetViewport(
-    view: Pointer,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    moveCursor: boolean,
-  ): void {
-    this.opentui.symbols.editorViewSetViewport(view, x, y, width, height, moveCursor)
-  }
-  public editorViewGetViewport(view: Pointer): { offsetY: number; offsetX: number; height: number; width: number } {
-    return this.opentui.symbols.editorViewGetViewport(view)
-  }
-  public editorViewSetScrollMargin(view: Pointer, margin: number): void {
-    this.opentui.symbols.editorViewSetScrollMargin(view, margin)
-  }
-  public editorViewSetWrapMode(view: Pointer, mode: "none" | "char" | "word"): void {
-    const modeValue = mode === "none" ? 0 : mode === "char" ? 1 : 2
-    this.opentui.symbols.editorViewSetWrapMode(view, modeValue)
-  }
-  public editorViewGetVirtualLineCount(view: Pointer): number {
-    return this.opentui.symbols.editorViewGetVirtualLineCount(view)
-  }
-  public editorViewGetTotalVirtualLineCount(view: Pointer): number {
-    return this.opentui.symbols.editorViewGetTotalVirtualLineCount(view)
-  }
-  public editorViewGetTextBufferView(view: Pointer): Pointer {
-    return this.opentui.symbols.editorViewGetTextBufferView(view)
-  }
+
   public editorViewSetSelection(
     view: Pointer,
     start: number,
@@ -1837,14 +1895,19 @@ export class NapiRenderLib implements RenderLib {
     bgColor: RGBA | null,
     fgColor: RGBA | null,
   ): void {
-    this.opentui.symbols.editorViewSetSelection(view, start, end, bgColor?.buffer ?? null, fgColor?.buffer ?? null)
+    const bg = bgColor ? bgColor.buffer : null
+    const fg = fgColor ? fgColor.buffer : null
+    this.opentui.symbols.editorViewSetSelection(view, start, end, bg, fg)
   }
+
   public editorViewResetSelection(view: Pointer): void {
     this.opentui.symbols.editorViewResetSelection(view)
   }
+
   public editorViewGetSelection(view: Pointer): { start: number; end: number } | null {
     return this.opentui.symbols.editorViewGetSelection(view)
   }
+
   public editorViewSetLocalSelection(
     view: Pointer,
     anchorX: number,
@@ -1856,21 +1919,27 @@ export class NapiRenderLib implements RenderLib {
     updateCursor: boolean,
     followCursor: boolean,
   ): boolean {
+    const bg = bgColor ? bgColor.buffer : null
+    const fg = fgColor ? fgColor.buffer : null
     return this.opentui.symbols.editorViewSetLocalSelection(
       view,
       anchorX,
       anchorY,
       focusX,
       focusY,
-      bgColor?.buffer ?? null,
-      fgColor?.buffer ?? null,
+      bg,
+      fg,
       updateCursor,
       followCursor,
     )
   }
+
   public editorViewUpdateSelection(view: Pointer, end: number, bgColor: RGBA | null, fgColor: RGBA | null): void {
-    this.opentui.symbols.editorViewUpdateSelection(view, end, bgColor?.buffer ?? null, fgColor?.buffer ?? null)
+    const bg = bgColor ? bgColor.buffer : null
+    const fg = fgColor ? fgColor.buffer : null
+    this.opentui.symbols.editorViewUpdateSelection(view, end, bg, fg)
   }
+
   public editorViewUpdateLocalSelection(
     view: Pointer,
     anchorX: number,
@@ -1882,110 +1951,107 @@ export class NapiRenderLib implements RenderLib {
     updateCursor: boolean,
     followCursor: boolean,
   ): boolean {
+    const bg = bgColor ? bgColor.buffer : null
+    const fg = fgColor ? fgColor.buffer : null
     return this.opentui.symbols.editorViewUpdateLocalSelection(
       view,
       anchorX,
       anchorY,
       focusX,
       focusY,
-      bgColor?.buffer ?? null,
-      fgColor?.buffer ?? null,
+      bg,
+      fg,
       updateCursor,
       followCursor,
     )
   }
+
   public editorViewResetLocalSelection(view: Pointer): void {
     this.opentui.symbols.editorViewResetLocalSelection(view)
   }
+
   public editorViewGetSelectedTextBytes(view: Pointer, maxLength: number): Uint8Array | null {
     const raw = this.opentui.symbols.editorViewGetSelectedTextBytes(view, maxLength)
     return raw ? new Uint8Array(raw) : null
   }
+
   public editorViewGetCursor(view: Pointer): { row: number; col: number } {
     return this.opentui.symbols.editorViewGetCursor(view)
   }
+
   public editorViewGetText(view: Pointer, maxLength: number): Uint8Array | null {
     const raw = this.opentui.symbols.editorViewGetText(view, maxLength)
     return raw ? new Uint8Array(raw) : null
   }
+
   public editorViewGetVisualCursor(view: Pointer): VisualCursor {
     return this.opentui.symbols.editorViewGetVisualCursor(view)
   }
+
   public editorViewMoveUpVisual(view: Pointer): void {
     this.opentui.symbols.editorViewMoveUpVisual(view)
   }
+
   public editorViewMoveDownVisual(view: Pointer): void {
     this.opentui.symbols.editorViewMoveDownVisual(view)
   }
+
   public editorViewDeleteSelectedText(view: Pointer): void {
     this.opentui.symbols.editorViewDeleteSelectedText(view)
   }
+
   public editorViewSetCursorByOffset(view: Pointer, offset: number): void {
     this.opentui.symbols.editorViewSetCursorByOffset(view, offset)
   }
+
   public editorViewGetNextWordBoundary(view: Pointer): VisualCursor {
     return this.opentui.symbols.editorViewGetNextWordBoundary(view)
   }
+
   public editorViewGetPrevWordBoundary(view: Pointer): VisualCursor {
     return this.opentui.symbols.editorViewGetPrevWordBoundary(view)
   }
+
   public editorViewGetEOL(view: Pointer): VisualCursor {
     return this.opentui.symbols.editorViewGetEOL(view)
   }
+
   public editorViewGetVisualSOL(view: Pointer): VisualCursor {
     return this.opentui.symbols.editorViewGetVisualSOL(view)
   }
+
   public editorViewGetVisualEOL(view: Pointer): VisualCursor {
     return this.opentui.symbols.editorViewGetVisualEOL(view)
   }
-  public editorViewGetLineInfo(view: Pointer): LineInfo {
-    return this.opentui.symbols.editorViewGetLineInfo(view)
+
+  public bufferPushScissorRect(buffer: Pointer, x: number, y: number, width: number, height: number): void {
+    this.opentui.symbols.bufferPushScissorRect(buffer, x, y, width, height)
   }
-  public editorViewGetLogicalLineInfo(view: Pointer): LineInfo {
-    return this.opentui.symbols.editorViewGetLogicalLineInfo(view)
+
+  public bufferPopScissorRect(buffer: Pointer): void {
+    this.opentui.symbols.bufferPopScissorRect(buffer)
   }
-  public editorViewSetPlaceholderStyledText(
-    view: Pointer,
-    chunks: Array<{ text: string; fg?: RGBA | null; bg?: RGBA | null; attributes?: number }>,
-  ): void {
-    this.opentui.symbols.editorViewSetPlaceholderStyledText(
-      view,
-      chunks.filter((chunk) => chunk.text.length > 0),
-    )
+
+  public bufferClearScissorRects(buffer: Pointer): void {
+    this.opentui.symbols.bufferClearScissorRects(buffer)
   }
-  public editorViewSetTabIndicator(view: Pointer, indicator: number): void {
-    this.opentui.symbols.editorViewSetTabIndicator(view, indicator)
+
+  public bufferPushOpacity(buffer: Pointer, opacity: number): void {
+    this.opentui.symbols.bufferPushOpacity(buffer, opacity)
   }
-  public editorViewSetTabIndicatorColor(view: Pointer, color: RGBA): void {
-    this.opentui.symbols.editorViewSetTabIndicatorColor(view, color.buffer)
+
+  public bufferPopOpacity(buffer: Pointer): void {
+    this.opentui.symbols.bufferPopOpacity(buffer)
   }
-  public getArenaAllocatedBytes(): number {
-    return this.opentui.symbols.getArenaAllocatedBytes()
+
+  public bufferGetCurrentOpacity(buffer: Pointer): number {
+    return this.opentui.symbols.bufferGetCurrentOpacity(buffer)
   }
-  public createSyntaxStyle(): Pointer {
-    const stylePtr = this.opentui.symbols.createSyntaxStyle()
-    if (!stylePtr) throw new Error("Failed to create SyntaxStyle")
-    return stylePtr
+
+  public bufferClearOpacity(buffer: Pointer): void {
+    this.opentui.symbols.bufferClearOpacity(buffer)
   }
-  public destroySyntaxStyle(style: Pointer): void {
-    this.opentui.symbols.destroySyntaxStyle(style)
-  }
-  public syntaxStyleRegister(
-    style: Pointer,
-    name: string,
-    fg: RGBA | null,
-    bg: RGBA | null,
-    attributes: number,
-  ): number {
-    return this.opentui.symbols.syntaxStyleRegister(style, name, fg?.buffer ?? null, bg?.buffer ?? null, attributes)
-  }
-  public syntaxStyleResolveByName(style: Pointer, name: string): number | null {
-    const id = this.opentui.symbols.syntaxStyleResolveByName(style, name)
-    return id === 0 ? null : id
-  }
-  public syntaxStyleGetStyleCount(style: Pointer): number {
-    return this.opentui.symbols.syntaxStyleGetStyleCount(style)
-  }
+
   public getTerminalCapabilities(renderer: Pointer): any {
     const caps = this.opentui.symbols.getTerminalCapabilities(renderer)
     return {
@@ -1993,16 +2059,111 @@ export class NapiRenderLib implements RenderLib {
       unicode: caps.unicode === 0 ? "wcwidth" : "unicode",
     }
   }
+
   public processCapabilityResponse(renderer: Pointer, response: string): void {
     this.opentui.symbols.processCapabilityResponse(renderer, response)
   }
+
   public encodeUnicode(
     text: string,
     widthMethod: WidthMethod,
   ): { ptr: Pointer; data: Array<{ width: number; char: number }> } | null {
     return this.opentui.symbols.encodeUnicode(text, widthMethod === "wcwidth" ? 0 : 1)
   }
+
   public freeUnicode(encoded: { ptr: Pointer; data: Array<{ width: number; char: number }> }): void {
     this.opentui.symbols.freeUnicode(encoded)
+  }
+
+  public bufferDrawChar(
+    buffer: Pointer,
+    char: number,
+    x: number,
+    y: number,
+    fg: RGBA,
+    bg: RGBA,
+    attributes: number = 0,
+  ): void {
+    this.opentui.symbols.bufferDrawChar(buffer, char, x, y, fg.buffer, bg.buffer, attributes)
+  }
+
+  public createSyntaxStyle(): Pointer {
+    const stylePtr = this.opentui.symbols.createSyntaxStyle()
+    if (!stylePtr) {
+      throw new Error("Failed to create SyntaxStyle")
+    }
+    return stylePtr
+  }
+
+  public destroySyntaxStyle(style: Pointer): void {
+    this.opentui.symbols.destroySyntaxStyle(style)
+  }
+
+  public syntaxStyleRegister(
+    style: Pointer,
+    name: string,
+    fg: RGBA | null,
+    bg: RGBA | null,
+    attributes: number,
+  ): number {
+    const fgPtr = fg ? fg.buffer : null
+    const bgPtr = bg ? bg.buffer : null
+    return this.opentui.symbols.syntaxStyleRegister(style, name, fgPtr, bgPtr, attributes)
+  }
+
+  public syntaxStyleResolveByName(style: Pointer, name: string): number | null {
+    const id = this.opentui.symbols.syntaxStyleResolveByName(style, name)
+    return id === 0 ? null : id
+  }
+
+  public syntaxStyleGetStyleCount(style: Pointer): number {
+    return this.opentui.symbols.syntaxStyleGetStyleCount(style)
+  }
+
+  public editorViewSetPlaceholderStyledText(
+    view: Pointer,
+    chunks: Array<{ text: string; fg?: RGBA | null; bg?: RGBA | null; attributes?: number }>,
+  ): void {
+    const sanitizedChunks = chunks
+      .filter((chunk) => chunk.text.length > 0)
+      .map((chunk) => {
+        const out: { text: string; fg?: Float32Array | null; bg?: Float32Array | null; attributes?: number } = {
+          text: chunk.text,
+        }
+        if (chunk.fg !== undefined) out.fg = chunk.fg ? chunk.fg.buffer : null
+        if (chunk.bg !== undefined) out.bg = chunk.bg ? chunk.bg.buffer : null
+        if (chunk.attributes !== undefined) out.attributes = chunk.attributes
+        return out
+      })
+
+    this.opentui.symbols.editorViewSetPlaceholderStyledText(view, sanitizedChunks)
+  }
+
+  public editorViewSetTabIndicator(view: Pointer, indicator: number): void {
+    this.opentui.symbols.editorViewSetTabIndicator(view, indicator)
+  }
+
+  public editorViewSetTabIndicatorColor(view: Pointer, color: RGBA): void {
+    this.opentui.symbols.editorViewSetTabIndicatorColor(view, color.buffer)
+  }
+
+  public onNativeEvent(name: string, handler: (data: ArrayBuffer) => void): void {
+    this.ensureCallbacksInitialized()
+    this._nativeEvents.on(name, handler)
+  }
+
+  public onceNativeEvent(name: string, handler: (data: ArrayBuffer) => void): void {
+    this.ensureCallbacksInitialized()
+    this._nativeEvents.once(name, handler)
+  }
+
+  public offNativeEvent(name: string, handler: (data: ArrayBuffer) => void): void {
+    this.ensureCallbacksInitialized()
+    this._nativeEvents.off(name, handler)
+  }
+
+  public onAnyNativeEvent(handler: (name: string, data: ArrayBuffer) => void): void {
+    this.ensureCallbacksInitialized()
+    this._anyEventHandlers.push(handler)
   }
 }
