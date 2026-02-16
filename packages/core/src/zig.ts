@@ -1,4 +1,4 @@
-import { type Pointer } from "bun:ffi"
+import type { Pointer } from "bun:ffi"
 import { type CursorStyle, type DebugOverlayCorner, type WidthMethod, type Highlight, type LineInfo } from "./types"
 export type { LineInfo }
 
@@ -6,8 +6,8 @@ import { RGBA } from "./lib/RGBA"
 import { OptimizedBuffer } from "./buffer"
 import { TextBuffer } from "./text-buffer"
 import { env, registerEnvVar } from "./lib/env"
-import { FFIRenderLib } from "./zig-ffi"
-import { NapiRenderLib } from "./zig-napi"
+import type { FFIRenderLib } from "./zig-ffi"
+import type { NapiRenderLib } from "./zig-napi"
 
 registerEnvVar({
   name: "OPENTUI_FORCE_NAPI",
@@ -514,13 +514,19 @@ export function setRenderLibPath(libPath: string) {
   }
 }
 
+let renderLibConstructor: typeof NapiRenderLib | typeof FFIRenderLib
+if (env.OPENTUI_FORCE_NAPI || !process.versions.bun) {
+  const { NapiRenderLib } = await import("./zig-napi")
+  renderLibConstructor = NapiRenderLib
+} else {
+  const { FFIRenderLib } = await import("./zig-ffi")
+  renderLibConstructor = FFIRenderLib
+}
+
 export function resolveRenderLib(): RenderLib {
   if (!opentuiLib) {
     try {
-      opentuiLib =
-        env.OPENTUI_FORCE_NAPI || !process.versions.bun
-          ? new NapiRenderLib(opentuiLibPath)
-          : new FFIRenderLib(opentuiLibPath)
+      opentuiLib = new renderLibConstructor(opentuiLibPath)
     } catch (error) {
       throw new Error(
         `Failed to initialize OpenTUI render library: ${error instanceof Error ? error.message : "Unknown error"}`,
@@ -532,8 +538,5 @@ export function resolveRenderLib(): RenderLib {
 
 // Try eager loading
 try {
-  opentuiLib =
-    env.OPENTUI_FORCE_NAPI || !process.versions.bun
-      ? new NapiRenderLib(opentuiLibPath)
-      : new FFIRenderLib(opentuiLibPath)
+  opentuiLib = new renderLibConstructor(opentuiLibPath)
 } catch (error) {}
