@@ -3,20 +3,22 @@
 // Last generated: 2025-11-06T15:28:19.836Z
 
 import type { FiletypeParserOptions } from "./types"
-import { resolve, dirname } from "path"
+import { resolve, dirname, join } from "path"
 import { fileURLToPath } from "url"
 
-import javascript_highlights from "./assets/javascript/highlights.scm" with { type: "file" }
-import javascript_language from "./assets/javascript/tree-sitter-javascript.wasm" with { type: "file" }
-import typescript_highlights from "./assets/typescript/highlights.scm" with { type: "file" }
-import typescript_language from "./assets/typescript/tree-sitter-typescript.wasm" with { type: "file" }
-import markdown_highlights from "./assets/markdown/highlights.scm" with { type: "file" }
-import markdown_language from "./assets/markdown/tree-sitter-markdown.wasm" with { type: "file" }
-import markdown_injections from "./assets/markdown/injections.scm" with { type: "file" }
-import markdown_inline_highlights from "./assets/markdown_inline/highlights.scm" with { type: "file" }
-import markdown_inline_language from "./assets/markdown_inline/tree-sitter-markdown_inline.wasm" with { type: "file" }
-import zig_highlights from "./assets/zig/highlights.scm" with { type: "file" }
-import zig_language from "./assets/zig/tree-sitter-zig.wasm" with { type: "file" }
+const resolveAssetPath = (relativePath: string) => join(import.meta.dirname, relativePath);
+
+const javascript_highlights = resolveAssetPath("./assets/javascript/highlights.scm");
+const javascript_language = resolveAssetPath("./assets/javascript/tree-sitter-javascript.wasm");
+const typescript_highlights = resolveAssetPath("./assets/typescript/highlights.scm");
+const typescript_language = resolveAssetPath("./assets/typescript/tree-sitter-typescript.wasm");
+const markdown_highlights = resolveAssetPath("./assets/markdown/highlights.scm");
+const markdown_language = resolveAssetPath("./assets/markdown/tree-sitter-markdown.wasm");
+const markdown_injections = resolveAssetPath("./assets/markdown/injections.scm");
+const markdown_inline_highlights = resolveAssetPath("./assets/markdown_inline/highlights.scm");
+const markdown_inline_language = resolveAssetPath("./assets/markdown_inline/tree-sitter-markdown_inline.wasm");
+const zig_highlights = resolveAssetPath("./assets/zig/highlights.scm");
+const zig_language = resolveAssetPath("./assets/zig/tree-sitter-zig.wasm");
 
 // Cached parsers to avoid re-resolving paths on every call
 let _cachedParsers: FiletypeParserOptions[] | undefined
