@@ -1,4 +1,4 @@
-import type { Pointer } from "bun:ffi"
+import type { Pointer, toArrayBuffer as bunToArrayBuffer, ptr as bunPtr } from "bun:ffi"
 import { type CursorStyle, type DebugOverlayCorner, type WidthMethod, type Highlight, type LineInfo } from "./types"
 export type { LineInfo }
 
@@ -6,8 +6,7 @@ import { RGBA } from "./lib/RGBA"
 import { OptimizedBuffer } from "./buffer"
 import { TextBuffer } from "./text-buffer"
 import { env, registerEnvVar } from "./lib/env"
-import type { FFIRenderLib } from "./zig-ffi"
-import type { NapiRenderLib } from "./zig-napi"
+import { NapiRenderLib, getArrayBufferFunctions } from "./zig-napi"
 
 registerEnvVar({
   name: "OPENTUI_FORCE_NAPI",
@@ -506,6 +505,8 @@ export interface RenderLib {
 
 let opentuiLibPath: string | undefined
 let opentuiLib: RenderLib | undefined
+let toArrayBufferImpl: typeof bunToArrayBuffer | undefined
+let ptrImpl: typeof bunPtr | undefined
 
 export function setRenderLibPath(libPath: string) {
   if (opentuiLibPath !== libPath) {
@@ -514,13 +515,33 @@ export function setRenderLibPath(libPath: string) {
   }
 }
 
-let renderLibConstructor: typeof NapiRenderLib | typeof FFIRenderLib
+export function toArrayBuffer(...args: Parameters<typeof bunToArrayBuffer>): ReturnType<typeof bunToArrayBuffer> {
+  if (!toArrayBufferImpl) {
+    throw new Error("native library not yet initialized")
+  }
+  return toArrayBufferImpl(...args)
+}
+
+export function ptr(...args: Parameters<typeof bunPtr>): ReturnType<typeof bunPtr> {
+  if (!ptrImpl) {
+    throw new Error("native library not yet initialized")
+  }
+  return ptrImpl(...args)
+}
+
+type RenderLibConstructor = new (libPath?: string) => RenderLib
+
+let renderLibConstructor: RenderLibConstructor
 if (env.OPENTUI_FORCE_NAPI || !process.versions.bun) {
-  const { NapiRenderLib } = await import("./zig-napi")
+  const arrayBufferFns = getArrayBufferFunctions(opentuiLibPath)
+  toArrayBufferImpl = arrayBufferFns.toArrayBuffer
+  ptrImpl = arrayBufferFns.ptr
   renderLibConstructor = NapiRenderLib
 } else {
-  const { FFIRenderLib } = await import("./zig-ffi")
-  renderLibConstructor = FFIRenderLib
+  const ffiModule = await import("./zig-ffi")
+  toArrayBufferImpl = ffiModule.toArrayBuffer
+  ptrImpl = ffiModule.ptr
+  renderLibConstructor = ffiModule.FFIRenderLib as RenderLibConstructor
 }
 
 export function resolveRenderLib(): RenderLib {

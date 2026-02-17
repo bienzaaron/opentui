@@ -1,6 +1,6 @@
 import { RGBA } from "./lib/RGBA"
 import { resolveRenderLib, type LineInfo, type RenderLib } from "./zig"
-import { type Pointer } from "bun:ffi"
+import type { Pointer } from "bun:ffi"
 import type { TextBuffer } from "./text-buffer"
 
 export class TextBufferView {

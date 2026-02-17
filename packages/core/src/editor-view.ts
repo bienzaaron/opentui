@@ -1,6 +1,6 @@
 import { RGBA } from "./lib/RGBA"
 import { resolveRenderLib, type RenderLib, type VisualCursor, type LineInfo } from "./zig"
-import { type Pointer } from "bun:ffi"
+import type { Pointer } from "bun:ffi"
 import type { EditBuffer } from "./edit-buffer"
 import { createExtmarksController } from "./lib"
 

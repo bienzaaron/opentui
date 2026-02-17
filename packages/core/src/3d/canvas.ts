@@ -2,7 +2,7 @@ import { GPUCanvasContextMock } from "bun-webgpu"
 import { RGBA } from "../lib/RGBA"
 import { SuperSampleType } from "./WGPURenderer"
 import type { OptimizedBuffer } from "../buffer"
-import { toArrayBuffer } from "bun:ffi"
+import { toArrayBuffer } from "../zig";
 import { Jimp } from "jimp"
 
 // @ts-ignore

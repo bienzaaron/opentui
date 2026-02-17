@@ -1,7 +1,8 @@
-import type { Pointer } from "bun:ffi"
+import type { Pointer, toArrayBuffer as bunToArrayBuffer, ptr as bunPtr } from "bun:ffi"
 import EventEmitter from "node:events"
 import { createRequire } from "node:module"
 import { existsSync } from "node:fs"
+import { dirname, join } from "node:path"
 import { LogLevel } from "yoga-layout"
 import { OptimizedBuffer } from "./buffer"
 import { isBunfsPath } from "./lib/bunfs"
@@ -11,12 +12,21 @@ import { TextBuffer } from "./text-buffer"
 import { type CursorStyle, DebugOverlayCorner, type Highlight, type LineInfo, type WidthMethod } from "./types"
 import type { CursorState, LogicalCursor, RenderLib, VisualCursor } from "./zig"
 
-const module = await import(`@opentui/core-${process.platform}-${process.arch}/index.ts`)
-let targetAddonPath = module.napiAddon
+function resolveTargetAddonPath(): string {
+  const require = createRequire(import.meta.url)
+  const packageName = `@opentui/core-${process.platform}-${process.arch}`
 
-if (isBunfsPath(targetAddonPath)) {
-  targetAddonPath = targetAddonPath.replace("../", "")
+  const packageJsonPath = require.resolve(`${packageName}/package.json`)
+  let addonPath = join(dirname(packageJsonPath), "libopentui.node")
+
+  if (isBunfsPath(addonPath)) {
+    addonPath = addonPath.replace("../", "")
+  }
+
+  return addonPath
 }
+
+const targetAddonPath = resolveTargetAddonPath()
 
 if (!existsSync(targetAddonPath)) {
   throw new Error(`opentui is not supported on the current platform: ${process.platform}-${process.arch}`)
@@ -52,6 +62,9 @@ interface CursorStateRaw {
 }
 
 interface NapiSymbols {
+  toArrayBuffer(ptr: Pointer, byteOffset?: number, byteLength?: number): ArrayBuffer
+  ptr(view: NodeJS.TypedArray | ArrayBufferLike | DataView, byteOffset?: number): Pointer
+
   setLogCallback: (callback: NativeLogCallback) => void
   setEventCallback: (callback: NativeEventCallback) => void
 
@@ -745,6 +758,22 @@ export function getOpenTUILib(libPath?: string): OpenTUILib {
   const addon: unknown = require(resolvedAddonPath)
   assertSymbols(addon)
   return { symbols: addon }
+}
+
+export function getArrayBufferFunctions(libPath?: string): {
+  toArrayBuffer: typeof bunToArrayBuffer
+  ptr: typeof bunPtr
+} {
+  const lib = getOpenTUILib(libPath)
+  function toArrayBuffer(ptr: Pointer, byteOffset?: number, byteLength?: number): ArrayBuffer {
+    return lib.symbols.toArrayBuffer(ptr, byteOffset, byteLength)
+  }
+
+  function ptr(view: NodeJS.TypedArray | ArrayBufferLike | DataView, byteOffset?: number): Pointer {
+    return lib.symbols.ptr(view, byteOffset)
+  }
+
+  return { toArrayBuffer, ptr }
 }
 
 export class NapiRenderLib implements RenderLib {

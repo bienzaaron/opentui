@@ -1,5 +1,5 @@
 import { resolveRenderLib, type LogicalCursor, type RenderLib } from "./zig"
-import { type Pointer } from "bun:ffi"
+import type { Pointer } from "bun:ffi"
 import { type WidthMethod, type Highlight } from "./types"
 import { RGBA } from "./lib/RGBA"
 import { EventEmitter } from "events"

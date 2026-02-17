@@ -3016,3 +3016,5 @@ export class FFIRenderLib implements RenderLib {
     this._anyEventHandlers.push(handler)
   }
 }
+
+export { toArrayBuffer, ptr };
