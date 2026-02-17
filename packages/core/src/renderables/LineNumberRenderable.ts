@@ -3,6 +3,7 @@ import { OptimizedBuffer } from "../buffer"
 import type { RenderContext, LineInfoProvider } from "../types"
 import { RGBA, parseColor } from "../lib/RGBA"
 import { MeasureMode } from "yoga-layout"
+import stringWidth from "string-width"
 
 export interface LineSign {
   before?: string
@@ -155,11 +156,11 @@ class GutterRenderable extends Renderable {
 
     for (const sign of this._lineSigns.values()) {
       if (sign.before) {
-        const width = Bun.stringWidth(sign.before)
+        const width = stringWidth(sign.before)
         this._maxBeforeWidth = Math.max(this._maxBeforeWidth, width)
       }
       if (sign.after) {
-        const width = Bun.stringWidth(sign.after)
+        const width = stringWidth(sign.after)
         this._maxAfterWidth = Math.max(this._maxAfterWidth, width)
       }
     }
@@ -277,7 +278,7 @@ class GutterRenderable extends Renderable {
         // Draw 'before' sign if present
         const sign = this._lineSigns.get(logicalLine)
         if (sign?.before) {
-          const beforeWidth = Bun.stringWidth(sign.before)
+          const beforeWidth = stringWidth(sign.before)
           // Pad to max before width for alignment
           const padding = this._maxBeforeWidth - beforeWidth
           currentX += padding

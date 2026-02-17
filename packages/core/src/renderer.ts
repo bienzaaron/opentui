@@ -16,6 +16,7 @@ import { MouseParser, type MouseEventType, type RawMouseEvent, type ScrollInfo }
 import { Selection } from "./lib/selection"
 import { Clipboard, type ClipboardTarget } from "./lib/clipboard"
 import { EventEmitter } from "events"
+import { setTimeout as sleep } from "node:timers/promises"
 import { destroySingleton, hasSingleton, singleton } from "./lib/singleton"
 import { getObjectsInViewport } from "./lib/objects-in-viewport"
 import { KeyHandler, InternalKeyHandler } from "./lib/KeyHandler"
@@ -470,7 +471,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
   private exitHandler: () => void = (() => {
     this.destroy()
     if (env.OTUI_DUMP_CAPTURES) {
-      Bun.sleep(100).then(() => {
+      sleep(100).then(() => {
         this.dumpOutputCache("=== CAPTURED OUTPUT ===\n")
       })
     }

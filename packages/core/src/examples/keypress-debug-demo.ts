@@ -5,6 +5,7 @@ import { ScrollBoxRenderable } from "../renderables/ScrollBox"
 import { TextNodeRenderable } from "../renderables/TextNode"
 import { setupCommonDemoKeys } from "./lib/standalone-keys"
 import { env, registerEnvVar } from "../lib/env"
+import { writeFileSync } from "node:fs"
 
 registerEnvVar({
   name: "OTUI_KEYPRESS_DEBUG_SHOW_JSON",
@@ -45,7 +46,7 @@ function saveToFile(capabilities: CliRenderer["capabilities"]) {
   }
 
   try {
-    Bun.write(filename, JSON.stringify(data, null, 2))
+    writeFileSync(filename, JSON.stringify(data, null, 2))
     console.log(`Saved debug data to ${filename}`)
   } catch (error) {
     console.error(`Failed to save file: ${error}`)

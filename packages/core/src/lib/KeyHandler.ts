@@ -1,4 +1,5 @@
 import { EventEmitter } from "events"
+import stripAnsi from "strip-ansi"
 import { parseKeypress, type KeyEventType, type ParsedKey } from "./parse.keypress"
 import { ANSI } from "../ansi"
 
@@ -130,7 +131,7 @@ export class KeyHandler extends EventEmitter<KeyHandlerEventMap> {
 
   public processPaste(data: string): void {
     try {
-      const cleanedData = Bun.stripANSI(data)
+      const cleanedData = stripAnsi(data)
       this.emit("paste", new PasteEvent(cleanedData))
     } catch (error) {
       console.error(`[KeyHandler] Error processing paste:`, error)
