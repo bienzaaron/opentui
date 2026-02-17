@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "fs/promises"
+import { mkdir, readFile, writeFile } from "fs/promises"
 import * as path from "path"
 
 export interface DownloadResult {
@@ -8,6 +8,12 @@ export interface DownloadResult {
 }
 
 export class DownloadUtils {
+  private static toArrayBuffer(buffer: Buffer): ArrayBuffer {
+    const out = new Uint8Array(buffer.byteLength)
+    out.set(buffer)
+    return out.buffer
+  }
+
   private static hashUrl(url: string): string {
     let hash = 0
     for (let i = 0; i < url.length; i++) {
@@ -45,7 +51,7 @@ export class DownloadUtils {
       await mkdir(path.dirname(cacheFile), { recursive: true })
 
       try {
-        const cachedContent = await Bun.file(cacheFile).arrayBuffer()
+        const cachedContent = this.toArrayBuffer(await readFile(cacheFile))
         if (cachedContent.byteLength > 0) {
           console.log(`Loaded from cache: ${cacheFile} (${source})`)
           return { content: cachedContent, filePath: cacheFile }
@@ -76,7 +82,7 @@ export class DownloadUtils {
     } else {
       try {
         console.log(`Loading from local path: ${source}`)
-        const content = await Bun.file(source).arrayBuffer()
+        const content = this.toArrayBuffer(await readFile(source))
         return { content, filePath: source }
       } catch (error) {
         return { error: `Error loading from local path ${source}: ${error}` }
@@ -111,7 +117,7 @@ export class DownloadUtils {
     } else {
       try {
         console.log(`Copying from local path: ${source}`)
-        const content = await Bun.file(source).arrayBuffer()
+        const content = this.toArrayBuffer(await readFile(source))
         await writeFile(targetPath, Buffer.from(content))
         return { content, filePath: targetPath }
       } catch (error) {

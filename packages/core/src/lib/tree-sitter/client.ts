@@ -12,6 +12,7 @@ import type {
   SimpleHighlight,
 } from "./types"
 import { getParsers } from "./default-parsers"
+import { createInProcessTreeSitterWorker, type TreeSitterWorkerLike } from "./parser.worker"
 import { resolve, isAbsolute, parse } from "path"
 import { existsSync } from "fs"
 import { registerEnvVar, env } from "../env"
@@ -55,7 +56,7 @@ const isUrl = (path: string) => path.startsWith("http://") || path.startsWith("h
 // TODO: TreeSitterClient should have a setOptions method, passing it on to the worker etc.
 export class TreeSitterClient extends EventEmitter<TreeSitterClientEvents> {
   private initialized = false
-  private worker: Worker | undefined
+  private worker: TreeSitterWorkerLike | Worker | undefined
   private buffers: Map<number, BufferState> = new Map()
   private initializePromise: Promise<void> | undefined
   private initializeResolvers:
@@ -91,23 +92,24 @@ export class TreeSitterClient extends EventEmitter<TreeSitterClientEvents> {
       return
     }
 
-    let worker_path: string | URL
-
-    if (env.OTUI_TREE_SITTER_WORKER_PATH) {
-      worker_path = env.OTUI_TREE_SITTER_WORKER_PATH
-    } else if (typeof OTUI_TREE_SITTER_WORKER_PATH !== "undefined") {
-      worker_path = OTUI_TREE_SITTER_WORKER_PATH
-    } else if (this.options.workerPath) {
-      worker_path = this.options.workerPath
+    if (!process.versions.bun) {
+      this.worker = createInProcessTreeSitterWorker()
     } else {
-      worker_path = new URL("./parser.worker.js", import.meta.url).href
-      if (!existsSync(resolve(import.meta.dirname, "parser.worker.js"))) {
-        worker_path = new URL("./parser.worker.ts", import.meta.url).href
+      let worker_path: string | URL
+      if (env.OTUI_TREE_SITTER_WORKER_PATH) {
+        worker_path = env.OTUI_TREE_SITTER_WORKER_PATH
+      } else if (typeof OTUI_TREE_SITTER_WORKER_PATH !== "undefined") {
+        worker_path = OTUI_TREE_SITTER_WORKER_PATH
+      } else if (this.options.workerPath) {
+        worker_path = this.options.workerPath
+      } else {
+        worker_path = new URL("./parser.worker.js", import.meta.url).href
+        if (!existsSync(resolve(import.meta.dirname, "parser.worker.js"))) {
+          worker_path = new URL("./parser.worker.ts", import.meta.url).href
+        }
       }
+      this.worker = new Worker(worker_path)
     }
-
-    this.worker = new Worker(worker_path)
-
     // @ts-ignore - onmessage exists
     this.worker.onmessage = this.handleWorkerMessage.bind(this)
 
