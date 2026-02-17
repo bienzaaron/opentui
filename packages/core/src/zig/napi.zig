@@ -1,6 +1,8 @@
 const std = @import("std");
-const napi = @import("napi");
+const napi = @import("napi/root.zig");
 const lib = @import("lib");
+
+const napi_c = napi.c;
 
 const CliRenderer = lib.CliRenderer;
 const OptimizedBuffer = lib.OptimizedBuffer;
@@ -20,8 +22,8 @@ comptime {
     napi.registerModule(init);
 }
 
-fn ptrToValue(env: napi.Env, ptr: anytype) !napi.Value {
-    const addr = @intFromPtr(ptr);
+fn ptrToValue(env: napi.Env, pointer: anytype) !napi.Value {
+    const addr = @intFromPtr(pointer);
     const max_safe: usize = 9007199254740991;
     if (addr > max_safe) {
         return error.PointerExceedsSafeInteger;
@@ -46,8 +48,8 @@ fn valueToPtr(comptime T: type, val: napi.Value) !T {
     return @ptrFromInt(addr);
 }
 
-fn optionalPtrToValue(env: napi.Env, ptr: anytype) !napi.Value {
-    if (ptr) |p| {
+fn optionalPtrToValue(env: napi.Env, pointer: anytype) !napi.Value {
+    if (pointer) |p| {
         return try ptrToValue(env, p);
     }
     return try env.getNull();
@@ -149,7 +151,7 @@ fn bytesToArrayBuffer(env: napi.Env, bytes: []const u8) !napi.Value {
     const array_buffer = try napi.Value.createArrayBuffer(env, bytes.len, &out_data);
     if (bytes.len > 0 and out_data != null) {
         const out_ptr: [*]u8 = @ptrCast(out_data.?);
-        std.mem.copyForwards(u8, out_ptr[0..bytes.len], bytes);
+        @memcpy(out_ptr, bytes);
     }
     return array_buffer;
 }
@@ -271,13 +273,32 @@ fn highlightToValue(env: napi.Env, hl: lib.ExternalHighlight) !napi.Value {
     return out;
 }
 
+fn toArrayBuffer(env: napi.Env, ptr_val: napi.Value, byte_offset_val: napi.Value, byte_length_val: napi.Value) !napi.Value {
+    const byte_offset: usize = @intCast(try extractU32(byte_offset_val));
+    var byte_length: usize = @intCast(try extractU32(byte_length_val));
+
+    var result: napi_c.napi_value = undefined;
+    const buffer_ptr = try valueToPtr([*:0]u8, ptr_val) + byte_offset;
+    if (byte_length == 0) {
+        byte_length = std.mem.span(buffer_ptr).len;
+    }
+    try napi.callNodeApi(env.c_handle, napi_c.napi_create_external_arraybuffer, .{ buffer_ptr, byte_length, null, null, &result });
+    return .{ .c_handle = result, .env = env };
+}
+
+fn ptr(env: napi.Env, view_val: napi.Value, byte_offset_val: napi.Value) !napi.Value {
+    const byte_offset: usize = @intCast(try extractU32(byte_offset_val));
+
+    return ptrToValue(env, try valueToPtr([*]u8, view_val) + byte_offset);
+}
+
 fn callLogJs(level: u8, msg: []const u8) void {
     const env = callback_env orelse return;
     const cb = log_callback orelse return;
 
     const level_val = napi.Value.createFrom(u32, env, level) catch return;
     const message_val = env.createString(.utf8, msg) catch return;
-    _ = cb.callFunction(2, null, .{ level_val, message_val }) catch {};
+    _ = cb.callFunction(2, cb, .{ level_val, message_val }) catch {};
 }
 
 fn forwardLogCallback(level: u8, msg_ptr: [*]const u8, msg_len: usize) callconv(.c) void {
@@ -288,7 +309,7 @@ fn forwardLogCallback(level: u8, msg_ptr: [*]const u8, msg_len: usize) callconv(
 
     const level_val = napi.Value.createFrom(u32, env, level) catch return;
     const message_val = env.createString(.utf8, msg) catch return;
-    _ = cb.callFunction(2, null, .{ level_val, message_val }) catch {};
+    _ = cb.callFunction(2, cb, .{ level_val, message_val }) catch {};
 }
 
 fn forwardEventCallback(name_ptr: [*]const u8, name_len: usize, data_ptr: [*]const u8, data_len: usize) callconv(.c) void {
@@ -301,7 +322,7 @@ fn forwardEventCallback(name_ptr: [*]const u8, name_len: usize, data_ptr: [*]con
     const name_val = env.createString(.utf8, name) catch return;
     const data_val = bytesToArrayBuffer(env, data) catch return;
 
-    _ = cb.callFunction(2, null, .{ name_val, data_val }) catch {};
+    _ = cb.callFunction(2, cb, .{ name_val, data_val }) catch {};
 }
 
 fn setLogCallback(env: napi.Env, callback_val: napi.Value) !napi.Value {
@@ -787,7 +808,7 @@ fn bufferDrawText(env: napi.Env, buffer_ptr_val: napi.Value, text_val: napi.Valu
     const x = try extractU32(x_val);
     const y = try extractU32(y_val);
     const fg = try rgbaFromValue(fg_val);
-    const bg = try rgbaFromValue(bg_val);
+    const bg = try optionalRgbaFromValue(bg_val);
     const attributes = try extractU32(attributes_val);
 
     lib.bufferDrawText(buffer_ptr, text.ptr, text.len, x, y, &fg, &bg, attributes);
@@ -1109,7 +1130,8 @@ fn textBufferRegisterMemBuffer(env: napi.Env, buffer_ptr_val: napi.Value, bytes_
     const allocator = std.heap.page_allocator;
     const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
     const bytes = try extractBytesAlloc(allocator, bytes_val);
-    defer allocator.free(bytes);
+    // TODO how should deallocation work for this
+    // defer allocator.free(bytes);
     const owned = try extractBool(owned_val);
     const id = lib.textBufferRegisterMemBuffer(buffer_ptr, bytes.ptr, bytes.len, owned);
     return napi.Value.createFrom(u32, env, id);
@@ -1120,7 +1142,8 @@ fn textBufferReplaceMemBuffer(env: napi.Env, buffer_ptr_val: napi.Value, mem_id_
     const buffer_ptr = try valueToPtr(*TextBuffer, buffer_ptr_val);
     const mem_id = try extractU8(mem_id_val);
     const bytes = try extractBytesAlloc(allocator, bytes_val);
-    defer allocator.free(bytes);
+    // TODO how should deallocation work for this
+    // defer allocator.free(bytes);
     const owned = try extractBool(owned_val);
     const ok = lib.textBufferReplaceMemBuffer(buffer_ptr, mem_id, bytes.ptr, bytes.len, owned);
     return try env.getBoolean(ok);
@@ -1612,7 +1635,7 @@ fn editBufferSetText(env: napi.Env, buffer_ptr_val: napi.Value, text_val: napi.V
     const allocator = std.heap.page_allocator;
     const buffer_ptr = try valueToPtr(*EditBuffer, buffer_ptr_val);
     const text = try extractBytesAlloc(allocator, text_val);
-    defer allocator.free(text);
+    // defer allocator.free(text);
     lib.editBufferSetText(buffer_ptr, text.ptr, text.len);
     return try env.getNull();
 }
@@ -2261,6 +2284,9 @@ fn freeUnicode(env: napi.Env, encoded_val: napi.Value) !napi.Value {
 }
 
 fn init(env: napi.Env, exports: napi.Value) !napi.Value {
+    try exports.setNamedProperty("toArrayBuffer", try env.createFunction(toArrayBuffer, null));
+    try exports.setNamedProperty("ptr", try env.createFunction(ptr, null));
+
     try exports.setNamedProperty("setLogCallback", try env.createFunction(setLogCallback, null));
     try exports.setNamedProperty("setEventCallback", try env.createFunction(setEventCallback, null));
 

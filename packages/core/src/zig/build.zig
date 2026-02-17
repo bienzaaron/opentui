@@ -235,8 +235,12 @@ fn buildTarget(
 
     node_addon.root_module.addImport("lib", module);
 
-    const dep_napi = b.dependency("napi", .{});
-    node_addon.root_module.addImport("napi", dep_napi.module("napi"));
+    const headers_dep = b.dependency("napi_headers", .{
+        .optimize = optimize,
+        .target = target,
+    });
+    node_addon.addSystemIncludePath(headers_dep.path("include"));
+
     node_addon.linker_allow_shlib_undefined = true;
     const install_napi = b.addInstallArtifact(node_addon, .{
         .dest_sub_path = "libopentui.node",
