@@ -15,58 +15,107 @@ import {
   ASCIIFontRenderable,
 } from "../index"
 import { measureText } from "../lib/ascii.font"
-import * as goldenStarDemo from "./golden-star-demo"
-import * as boxExample from "./fonts"
-import * as fractalShaderExample from "./fractal-shader-demo"
-import * as framebufferExample from "./framebuffer-demo"
-import * as lightsPhongExample from "./lights-phong-demo"
-import * as physxPlanckExample from "./physx-planck-2d-demo"
-import * as physxRapierExample from "./physx-rapier-2d-demo"
-import * as opentuiDemo from "./opentui-demo"
-import * as nestedZIndexDemo from "./nested-zindex-demo"
-import * as relativePositioningDemo from "./relative-positioning-demo"
-import * as transparencyDemo from "./transparency-demo"
-import * as draggableThreeDemo from "./draggable-three-demo"
-import * as scrollExample from "./scroll-example"
-import * as stickyScrollExample from "./sticky-scroll-example"
-import * as shaderCubeExample from "./shader-cube-demo"
-import * as spriteAnimationExample from "./sprite-animation-demo"
-import * as spriteParticleExample from "./sprite-particle-generator-demo"
-import * as staticSpriteExample from "./static-sprite-demo"
-import * as textureLoadingExample from "./texture-loading-demo"
-import * as timelineExample from "./timeline-example"
-import * as tabSelectExample from "./tab-select-demo"
-import * as selectExample from "./select-demo"
-import * as inputExample from "./input-demo"
-import * as layoutExample from "./simple-layout-example"
-import * as inputSelectLayoutExample from "./input-select-layout-demo"
-import * as styledTextExample from "./styled-text-demo"
-import * as mouseInteractionExample from "./mouse-interaction-demo"
-import * as textSelectionExample from "./text-selection-demo"
-import * as asciiFontSelectionExample from "./ascii-font-selection-demo"
-import * as splitModeExample from "./split-mode-demo"
-import * as consoleExample from "./console-demo"
-import * as vnodeCompositionDemo from "./vnode-composition-demo"
-import * as hastSyntaxHighlightingExample from "./hast-syntax-highlighting-demo"
-import * as codeDemo from "./code-demo"
-import * as liveStateExample from "./live-state-demo"
-import * as fullUnicodeExample from "./full-unicode-demo"
-import * as textNodeDemo from "./text-node-demo"
-import * as textWrapExample from "./text-wrap"
-import * as editorDemo from "./editor-demo"
-import * as sliderDemo from "./slider-demo"
-import * as terminalDemo from "./terminal"
-import * as diffDemo from "./diff-demo"
-import * as keypressDebugDemo from "./keypress-debug-demo"
-import * as extmarksDemo from "./extmarks-demo"
-import * as markdownDemo from "./markdown-demo"
-import * as linkDemo from "./link-demo"
-import * as opacityExample from "./opacity-example"
-import * as scrollboxOverlayHitTest from "./scrollbox-overlay-hit-test"
-import * as scrollboxMouseTest from "./scrollbox-mouse-test"
-import * as textTruncationDemo from "./text-truncation-demo"
-import * as grayscaleBufferDemo from "./grayscale-buffer-demo"
 import { setupCommonDemoKeys } from "./lib/standalone-keys"
+
+interface ExampleModule {
+  run?: (renderer: CliRenderer) => void
+  destroy?: (renderer: CliRenderer) => void
+}
+
+const isBunRuntime = typeof process !== "undefined" && Boolean(process.versions?.bun)
+
+const bunOnlyExamples = new Set([
+  "./golden-star-demo",
+  "./fractal-shader-demo",
+  "./framebuffer-demo",
+  "./lights-phong-demo",
+  "./physx-planck-2d-demo",
+  "./physx-rapier-2d-demo",
+  "./draggable-three-demo",
+  "./shader-cube-demo",
+  "./sprite-animation-demo",
+  "./sprite-particle-generator-demo",
+  "./static-sprite-demo",
+  "./texture-loading-demo",
+])
+
+async function importOptionalExample(path: string): Promise<ExampleModule> {
+  if (!isBunRuntime && bunOnlyExamples.has(path)) {
+    return {}
+  }
+
+  try {
+    return await import(path)
+  } catch (error) {
+    if (isBunRuntime) {
+      throw error
+    }
+
+    const message = error instanceof Error ? error.message : String(error)
+    const stack = error instanceof Error ? error.stack : ""
+    const unsupportedBunImport = message.includes("bun:") || stack?.includes("bun:")
+    const missingBunWebGpu = message.includes("bun-webgpu") || stack?.includes("bun-webgpu")
+    const unsupportedAssetImport = message.includes("ERR_UNKNOWN_FILE_EXTENSION")
+
+    if (unsupportedBunImport || missingBunWebGpu || unsupportedAssetImport) {
+      return {}
+    }
+
+    throw error
+  }
+}
+
+const goldenStarDemo = await importOptionalExample("./golden-star-demo")
+const boxExample = await importOptionalExample("./fonts")
+const fractalShaderExample = await importOptionalExample("./fractal-shader-demo")
+const framebufferExample = await importOptionalExample("./framebuffer-demo")
+const lightsPhongExample = await importOptionalExample("./lights-phong-demo")
+const physxPlanckExample = await importOptionalExample("./physx-planck-2d-demo")
+const physxRapierExample = await importOptionalExample("./physx-rapier-2d-demo")
+const opentuiDemo = await importOptionalExample("./opentui-demo")
+const nestedZIndexDemo = await importOptionalExample("./nested-zindex-demo")
+const relativePositioningDemo = await importOptionalExample("./relative-positioning-demo")
+const transparencyDemo = await importOptionalExample("./transparency-demo")
+const draggableThreeDemo = await importOptionalExample("./draggable-three-demo")
+const scrollExample = await importOptionalExample("./scroll-example")
+const stickyScrollExample = await importOptionalExample("./sticky-scroll-example")
+const shaderCubeExample = await importOptionalExample("./shader-cube-demo")
+const spriteAnimationExample = await importOptionalExample("./sprite-animation-demo")
+const spriteParticleExample = await importOptionalExample("./sprite-particle-generator-demo")
+const staticSpriteExample = await importOptionalExample("./static-sprite-demo")
+const textureLoadingExample = await importOptionalExample("./texture-loading-demo")
+const timelineExample = await importOptionalExample("./timeline-example")
+const tabSelectExample = await importOptionalExample("./tab-select-demo")
+const selectExample = await importOptionalExample("./select-demo")
+const inputExample = await importOptionalExample("./input-demo")
+const layoutExample = await importOptionalExample("./simple-layout-example")
+const inputSelectLayoutExample = await importOptionalExample("./input-select-layout-demo")
+const styledTextExample = await importOptionalExample("./styled-text-demo")
+const mouseInteractionExample = await importOptionalExample("./mouse-interaction-demo")
+const textSelectionExample = await importOptionalExample("./text-selection-demo")
+const asciiFontSelectionExample = await importOptionalExample("./ascii-font-selection-demo")
+const splitModeExample = await importOptionalExample("./split-mode-demo")
+const consoleExample = await importOptionalExample("./console-demo")
+const vnodeCompositionDemo = await importOptionalExample("./vnode-composition-demo")
+const hastSyntaxHighlightingExample = await importOptionalExample("./hast-syntax-highlighting-demo")
+const codeDemo = await importOptionalExample("./code-demo")
+const liveStateExample = await importOptionalExample("./live-state-demo")
+const fullUnicodeExample = await importOptionalExample("./full-unicode-demo")
+const textNodeDemo = await importOptionalExample("./text-node-demo")
+const textWrapExample = await importOptionalExample("./text-wrap")
+const editorDemo = await importOptionalExample("./editor-demo")
+const sliderDemo = await importOptionalExample("./slider-demo")
+const terminalDemo = await importOptionalExample("./terminal")
+const diffDemo = await importOptionalExample("./diff-demo")
+const keypressDebugDemo = await importOptionalExample("./keypress-debug-demo")
+const extmarksDemo = await importOptionalExample("./extmarks-demo")
+const markdownDemo = await importOptionalExample("./markdown-demo")
+const linkDemo = await importOptionalExample("./link-demo")
+const opacityExample = await importOptionalExample("./opacity-example")
+const scrollboxOverlayHitTest = await importOptionalExample("./scrollbox-overlay-hit-test")
+const scrollboxMouseTest = await importOptionalExample("./scrollbox-mouse-test")
+const textTruncationDemo = await importOptionalExample("./text-truncation-demo")
+const grayscaleBufferDemo = await importOptionalExample("./grayscale-buffer-demo")
 
 interface Example {
   name: string
@@ -391,6 +440,8 @@ const examples: Example[] = [
   },
 ]
 
+const availableExamples = isBunRuntime ? examples : examples.filter((example) => Boolean(example.run))
+
 class ExampleSelector {
   private renderer: CliRenderer
   private currentExample: Example | null = null
@@ -404,7 +455,7 @@ class ExampleSelector {
   private selectElement: SelectRenderable | null = null
   private selectBox: BoxRenderable | null = null
   private notImplementedText: TextRenderable | null = null
-  private allExamples: Example[] = examples
+  private allExamples: Example[] = availableExamples
 
   constructor(renderer: CliRenderer) {
     this.renderer = renderer
@@ -497,7 +548,7 @@ class ExampleSelector {
     this.menuContainer.add(this.selectBox)
 
     // Select element
-    const selectOptions: SelectOption[] = examples.map((example) => ({
+    const selectOptions: SelectOption[] = this.allExamples.map((example) => ({
       name: example.name,
       description: example.description,
       value: example,
