@@ -8,8 +8,6 @@ import { TextNodeRenderable } from "../renderables/TextNode"
 import { ScrollBoxRenderable } from "../renderables/ScrollBox"
 import { InputRenderable, InputRenderableEvents } from "../renderables/Input"
 import { setupCommonDemoKeys } from "./lib/standalone-keys"
-import { existsSync } from "fs"
-import { resolve } from "path"
 import { readFile } from "node:fs/promises"
 
 let mainContainer: BoxRenderable | null = null
