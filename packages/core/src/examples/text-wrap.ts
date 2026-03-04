@@ -8,7 +8,7 @@ import { TextNodeRenderable } from "../renderables/TextNode"
 import { ScrollBoxRenderable } from "../renderables/ScrollBox"
 import { InputRenderable, InputRenderableEvents } from "../renderables/Input"
 import { setupCommonDemoKeys } from "./lib/standalone-keys"
-import { readFile } from "node:fs/promises"
+import { readFile, stat } from "node:fs/promises"
 
 let mainContainer: BoxRenderable | null = null
 let contentBox: BoxRenderable | null = null
@@ -578,7 +578,7 @@ export function run(renderer: CliRenderer): void {
       }
 
       // Get file size for display
-      const fileStats = await Bun.file(filePath).stat()
+      const fileStats = await stat(filePath)
       const fileSizeBytes = fileStats.size
       const fileSizeMB = (fileSizeBytes / (1024 * 1024)).toFixed(2)
 
