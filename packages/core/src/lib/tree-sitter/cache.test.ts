@@ -3,7 +3,7 @@ import { TreeSitterClient, addDefaultParsers } from "./client"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { mkdir, readdir, stat } from "node:fs/promises"
-import { readFileSync  } from "node:fs"
+import { readFileSync } from "node:fs"
 import type { FiletypeParserOptions } from "./types"
 
 describe("TreeSitterClient Caching", () => {
